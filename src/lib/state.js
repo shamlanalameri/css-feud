@@ -1,0 +1,109 @@
+/* ========================= state + review grouping ========================= */
+import { uid, normTxt, similar } from './utils.js';
+
+export function defaultState(id, title) {
+  return {
+    id,
+    rev: 0,
+    writer: '',
+    title: title || 'CSS Feud',
+    createdAt: Date.now(),
+    demo: false,
+    joinCode: id.slice(-4).toUpperCase(),
+    teams: [
+      { name: 'Team 1', color: '#CBA344', logo: '', players: ['', '', '', '', ''], score: 0, playerIdx: 0 },
+      { name: 'Team 2', color: '#4F98FF', logo: '', players: ['', '', '', '', ''], score: 0, playerIdx: 0 },
+    ],
+    questions: [],
+    qIdx: 0,
+    phase: 'idle', // idle | survey | review | board | roundEnd | final
+    surveyOpen: false,
+    surveyEndsAt: 0,
+    surveySession: 0,
+    review: [],
+    board: [],
+    roundPoints: [0, 0],
+    turn: null,
+    buzz: { open: false, openedAt: 0 },
+    paused: false,
+    history: [],
+    log: [],
+    fx: { n: 0, type: '' },
+  };
+}
+
+export function blankQ(text) {
+  return { id: uid(), text: text || '', category: '', image: '', timeLimit: 0, maxAnswers: 6, preRaw: '', notes: '' };
+}
+
+export function demoState() {
+  const s = defaultState('demo', 'CSS Feud — demo game');
+  s.demo = true;
+  s.teams[0] = { name: 'Desert Falcons', color: '#CBA344', logo: '', players: ['Fouzia', 'Ali', 'Mariam', 'Omar', 'Huda'], score: 0, playerIdx: 0 };
+  s.teams[1] = { name: 'Blue Oryx', color: '#4F98FF', logo: '', players: ['Khalid', 'Sara', 'Yousef', 'Noora', 'Hassan'], score: 0, playerIdx: 0 };
+  const q1 = blankQ('What is the first thing employees do when they arrive at the office?');
+  q1.category = 'Office life';
+  q1.maxAnswers = 6;
+  const q2 = blankQ('Name something employees always forget before a meeting.');
+  q2.category = 'Meetings';
+  q2.maxAnswers = 6;
+  q2.preRaw = 'Laptop charger | 12\nNotebook and pen | 9\nJoining the call on time | 7\nAgenda | 5\nCoffee | 3';
+  const q3 = blankQ('What is the most popular lunch order in the office?');
+  q3.category = 'Food';
+  q3.maxAnswers = 5;
+  q3.timeLimit = 90;
+  s.questions = [q1, q2, q3];
+  return s;
+}
+
+export const DEMO_POOLS = [
+  ['Coffee', 'coffee', 'Make coffee', 'Get coffe', 'Check email', 'check emails', 'Emails', 'Say good morning', 'good morning to everyone', 'Open laptop', 'open the laptop', 'Chat with colleagues', 'Karak', 'karak tea', 'Breakfast', 'Check WhatsApp', 'Coffee', 'check email', 'Coffee', 'Prayer', 'Open Teams', 'coffee first', 'Say hi', 'Check calendar'],
+  ['Charger', 'laptop charger', 'Pen', 'a pen', 'Notebook', 'The agenda', 'agenda', 'Coffee', 'Their laptop', 'Meeting room booking', 'To join on time', 'Water', 'charger', 'Pen and paper', 'The meeting link'],
+  ['Biryani', 'biryani', 'Shawarma', 'shawerma', 'Burger', 'burgers', 'Sushi', 'Salad', 'salads', 'Pasta', 'Manakish', 'Grilled chicken', 'biryani', 'Shawarma', 'Kebab', 'Poke bowl'],
+];
+
+export function parsePre(q) {
+  return String(q.preRaw || '')
+    .split('\n')
+    .map((l) => {
+      const m = l.split('|');
+      const text = (m[0] || '').trim();
+      const pts = parseInt((m[1] || '').trim(), 10);
+      return text ? { text, pts: isNaN(pts) ? 0 : pts } : null;
+    })
+    .filter(Boolean);
+}
+
+// Group survey responses: exact/normalised match, then fuzzy (Levenshtein) match,
+// seeded with any pre-approved answers. Points default to submission count.
+export function buildGroups(q, RESP) {
+  const groups = [];
+  parsePre(q).forEach((p) => groups.push({ id: uid(), name: p.text, count: 0, points: p.pts, include: true, members: [], pre: true }));
+  Object.values(RESP || {})
+    .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+    .forEach((r) => {
+      const raw = String(r.text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const n = normTxt(raw);
+      if (!n) return;
+      let g = groups.find((g) => normTxt(g.name) === n || g.members.some((m) => normTxt(m) === n));
+      if (!g) g = groups.find((g) => similar(normTxt(g.name), n));
+      if (g) {
+        g.count++;
+        g.members.push(raw);
+      } else groups.push({ id: uid(), name: raw[0].toUpperCase() + raw.slice(1), count: 1, points: 0, include: true, members: [raw], pre: false });
+    });
+  groups.forEach((g) => {
+    if (!g.pre || g.count > 0) g.points = Math.max(g.count, g.pre ? g.points : g.count);
+  });
+  groups.sort((a, b) => (b.points || b.count) - (a.points || a.count));
+  return groups;
+}
+
+export function mergeSuggestions(review) {
+  const out = [];
+  const r = review || [];
+  for (let i = 0; i < r.length; i++)
+    for (let j = i + 1; j < r.length; j++)
+      if (similar(normTxt(r[i].name), normTxt(r[j].name))) out.push([r[i], r[j]]);
+  return out.slice(0, 5);
+}
