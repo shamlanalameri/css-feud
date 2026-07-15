@@ -39,6 +39,20 @@ let lastFxN = 0,
 let respUnsubs = [],
   respSubCount = -1;
 let EDIT_Q = null; // expanded question editor index
+let REVIEW_Q = null; // question whose answers the admin is reviewing during the survey
+
+// Which question's review is currently being edited: the one the admin opened
+// during the survey, otherwise the question being played.
+function reviewIdx() {
+  if (S && S.stage === 'survey' && REVIEW_Q != null) return REVIEW_Q;
+  return S ? S.qIdx : 0;
+}
+function reviewArr(create) {
+  const i = reviewIdx();
+  if (create && !S.reviews[i]) S.reviews[i] = [];
+  return S.reviews[i] || [];
+}
+export const getReviewIdx = () => reviewIdx();
 
 /* ========================= derived helpers ========================= */
 export const curQ = () => (S && S.questions[S.qIdx]) || null;
@@ -90,6 +104,7 @@ function buildSnapshot() {
     ADMIN_OK,
     ADMIN_TAB,
     EDIT_Q,
+    REVIEW_Q,
     MUTED: isMuted(),
     BANNER_UNTIL,
     HAS_FB,
@@ -311,7 +326,7 @@ export const ACT = {
     if (!confirm('Reset the current question? Board, review groups, and round points will be cleared.')) return;
     mutate(() => {
       S.board = [];
-      S.review = [];
+      S.reviews[S.qIdx] = [];
       S.roundPoints = [0, 0];
       S.turn = null;
       S.phase = 'idle';
@@ -346,7 +361,7 @@ export const ACT = {
       S.stage = 'setup';
       S.phase = 'idle';
       S.survey = { open: false, endsAt: 0, session: (S.survey.session || 0) + 1 };
-      S.review = [];
+      S.reviews = {};
       S.board = [];
       S.roundPoints = [0, 0];
       S.turn = null;
@@ -423,7 +438,6 @@ export const ACT = {
     mutate(() => {
       S.qIdx = +i;
       S.phase = 'idle';
-      S.review = [];
       S.board = [];
       S.roundPoints = [0, 0];
       S.turn = null;
@@ -439,12 +453,13 @@ export const ACT = {
       toast('Add at least one question with text first (Questions tab)');
       return;
     }
+    REVIEW_Q = null;
     mutate(() => {
       S.stage = 'survey';
       S.survey = { open: true, endsAt: 0, session: S.survey.session || 0 };
       S.qIdx = 0;
       S.phase = 'idle';
-      S.review = [];
+      S.reviews = {};
       S.board = [];
       S.roundPoints = [0, 0];
       S.turn = null;
@@ -453,6 +468,7 @@ export const ACT = {
   },
   // Close the survey and move into the play stage (build boards, buzz, score).
   closeSurvey() {
+    REVIEW_Q = null;
     mutate(() => {
       S.survey.open = false;
       S.stage = 'play';
@@ -460,10 +476,12 @@ export const ACT = {
       S.phase = 'idle';
     }, 'Survey closed — ' + totalRespondents() + ' people answered');
   },
-  // Phase 2, per question: build the answer board from that question's responses.
+  // Phase 2, per question: open the review (reusing any prep done during the survey).
   buildBoard() {
     mutate(() => {
-      S.review = buildGroups(curQ(), RESPALL[S.qIdx] || {});
+      if (!S.reviews[S.qIdx] || !S.reviews[S.qIdx].length) {
+        S.reviews[S.qIdx] = buildGroups(curQ(), RESPALL[S.qIdx] || {});
+      }
       S.phase = 'review';
     }, 'Building the board for question ' + (S.qIdx + 1));
   },
@@ -488,11 +506,12 @@ export const ACT = {
     }
     mutate(() => {
       S.phase = 'review';
-      S.review = buildGroups(curQ(), RESPALL[S.qIdx] || {});
+      S.reviews[S.qIdx] = buildGroups(curQ(), RESPALL[S.qIdx] || {});
     }, 'Review opened from pre-approved answers');
   },
   approveBoard() {
-    const inc = (S.review || []).filter((g) => g.include && String(g.name).trim());
+    const R = S.reviews[S.qIdx] || [];
+    const inc = R.filter((g) => g.include && String(g.name).trim());
     if (!inc.length) {
       toast('Include at least one answer');
       return;
@@ -511,37 +530,60 @@ export const ACT = {
     }, 'Board approved — ' + Math.min(inc.length, q.maxAnswers || 8) + ' answers published');
   },
 
-  /* --- review --- */
+  /* --- per-question review, editable during the survey --- */
+  openReview(i) {
+    i = +i;
+    REVIEW_Q = i;
+    mutate(() => {
+      if (!S.reviews[i] || !S.reviews[i].length) S.reviews[i] = buildGroups(S.questions[i], RESPALL[i] || {});
+    }, 'Reviewing answers for question ' + (i + 1));
+  },
+  closeReview() {
+    REVIEW_Q = null;
+    emit();
+  },
+  refreshReview() {
+    const i = reviewIdx();
+    mutate(() => {
+      S.reviews[i] = buildGroups(S.questions[i], RESPALL[i] || {});
+    }, 'Answers re-grouped for question ' + (i + 1));
+  },
+
+  /* --- review edits (act on whichever review is open) --- */
   grpMerge(ids) {
     if (!ids || ids.length < 2) {
       toast('Tick two or more groups to merge');
       return;
     }
     mutate(() => {
-      const groups = ids.map((id) => S.review.find((g) => g.id === id)).filter(Boolean);
+      const R = reviewArr(true);
+      const groups = ids.map((id) => R.find((g) => g.id === id)).filter(Boolean);
       const base = groups[0];
+      if (!base) return;
       groups.slice(1).forEach((g) => {
         base.count += g.count;
         base.members = base.members.concat(g.members);
-        S.review.splice(S.review.indexOf(g), 1);
+        R.splice(R.indexOf(g), 1);
       });
       base.points = Math.max(base.count, +base.points || 0);
     }, 'Answer groups merged');
   },
   grpMergePair(a, b) {
     mutate(() => {
-      const ga = S.review.find((g) => g.id === a),
-        gb = S.review.find((g) => g.id === b);
+      const R = reviewArr(true);
+      const ga = R.find((g) => g.id === a),
+        gb = R.find((g) => g.id === b);
       if (!ga || !gb) return;
       ga.count += gb.count;
       ga.members = ga.members.concat(gb.members);
       ga.points = Math.max(ga.count, +ga.points || 0);
-      S.review.splice(S.review.indexOf(gb), 1);
+      R.splice(R.indexOf(gb), 1);
     }, 'Answer groups merged');
   },
   grpSplit(gid) {
     mutate(() => {
-      const g = S.review.find((x) => x.id === gid);
+      const R = reviewArr(true);
+      const g = R.find((x) => x.id === gid);
       if (!g) return;
       const uniq = {};
       g.members.forEach((m) => {
@@ -554,30 +596,35 @@ export const ACT = {
         toast('Nothing to separate in this group');
         return;
       }
-      const i = S.review.indexOf(g);
+      const i = R.indexOf(g);
       const news = parts.map((p) => ({ id: uid(), name: p.text[0].toUpperCase() + p.text.slice(1), count: p.c, points: p.c, include: true, members: Array(p.c).fill(p.text), pre: false }));
-      S.review.splice(i, 1, ...news);
+      R.splice(i, 1, ...news);
     }, 'Answer group separated');
   },
   grpDel(gid) {
     mutate(() => {
-      S.review = S.review.filter((g) => g.id !== gid);
+      const i = reviewIdx();
+      S.reviews[i] = (S.reviews[i] || []).filter((g) => g.id !== gid);
     }, 'Answer removed from review');
   },
   grpUp(gid) {
-    const i = S.review.findIndex((g) => g.id === gid);
+    const R = reviewArr();
+    const i = R.findIndex((g) => g.id === gid);
     if (i > 0)
       mutate(() => {
-        const [g] = S.review.splice(i, 1);
-        S.review.splice(i - 1, 0, g);
+        const RR = reviewArr(true);
+        const [g] = RR.splice(i, 1);
+        RR.splice(i - 1, 0, g);
       });
   },
   grpDown(gid) {
-    const i = S.review.findIndex((g) => g.id === gid);
-    if (i < S.review.length - 1 && i > -1)
+    const R = reviewArr();
+    const i = R.findIndex((g) => g.id === gid);
+    if (i < R.length - 1 && i > -1)
       mutate(() => {
-        const [g] = S.review.splice(i, 1);
-        S.review.splice(i + 1, 0, g);
+        const RR = reviewArr(true);
+        const [g] = RR.splice(i, 1);
+        RR.splice(i + 1, 0, g);
       });
   },
   grpAdd(text, pts) {
@@ -586,12 +633,12 @@ export const ACT = {
       return;
     }
     mutate(() => {
-      S.review.push({ id: uid(), name: text.trim(), count: 0, points: Math.max(0, +pts || 0), include: true, members: [], pre: false });
+      reviewArr(true).push({ id: uid(), name: text.trim(), count: 0, points: Math.max(0, +pts || 0), include: true, members: [], pre: false });
     }, 'Answer added manually: ' + text.trim());
   },
   grpHideLow() {
     mutate(() => {
-      S.review.forEach((g) => {
+      reviewArr(true).forEach((g) => {
         if (g.count <= 1 && !g.pre) g.include = false;
       });
     }, 'Low-frequency answers hidden');
@@ -747,7 +794,6 @@ export const ACT = {
     mutate(() => {
       S.qIdx++;
       S.phase = 'idle';
-      S.review = [];
       S.board = [];
       S.roundPoints = [0, 0];
       S.turn = null;

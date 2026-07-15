@@ -100,13 +100,17 @@ function Scores({ S }) {
   );
 }
 
-function Review({ S }) {
+// Editable answer review for one question. `idx` is the question index; `groups`
+// is S.reviews[idx]. mode 'play' shows the approve button; mode 'survey' shows a
+// Done button and a re-group control (answers keep arriving).
+function Review({ S, idx, groups, mode }) {
   const [sel, setSel] = useState(() => new Set());
   const [newText, setNewText] = useState('');
   const [newPts, setNewPts] = useState('');
-  const sugg = mergeSuggestions(S.review);
-  const groups = S.review || [];
+  groups = groups || [];
+  const sugg = mergeSuggestions(groups);
   const included = groups.filter((g) => g.include).length;
+  const q = S.questions[idx];
 
   const toggle = (id) => {
     const n = new Set(sel);
@@ -124,21 +128,27 @@ function Review({ S }) {
   };
 
   return (
-    <div className="panel">
-      <h3>Answer review — private</h3>
+    <div className="panel" style={mode === 'survey' ? { border: '1.5px solid var(--gold-400)', background: '#FDFBF3' } : null}>
+      <h3>{mode === 'survey' ? `Review answers — question ${idx + 1}` : 'Answer review — private'}</h3>
       <div className="notice">
-        Employees and the main screen cannot see this. Merge, rename, re-point and reorder, then approve. Points default
-        to the number of employees who gave that answer.
+        {q ? <b>{q.text}</b> : null}
+        <div style={{ marginTop: 4 }}>
+          Group different spellings of the same answer, rename them, and set the points. Points default to the number of
+          people who gave that answer. Employees never see this.
+        </div>
       </div>
       <div className="row" style={{ marginBottom: 10 }}>
         <button className="btn btn-sm btn-blue" onClick={merge}>
-          Merge ticked groups
+          Merge ticked answers
         </button>
         <button className="btn btn-sm btn-outline" onClick={ACT.grpHideLow}>
           Hide answers with ≤ 1 vote
         </button>
+        <button className="btn btn-sm btn-outline" onClick={ACT.refreshReview} title="Rebuild groups from the latest submitted answers">
+          Re-group latest answers
+        </button>
         <span className="hint" style={{ margin: 0 }}>
-          {included} included · board shows top {curQ() ? curQ().maxAnswers : 8}
+          {included} shown · board shows top {q ? q.maxAnswers : 8}
         </span>
       </div>
       {sugg.length > 0 && (
@@ -160,10 +170,10 @@ function Review({ S }) {
         <div className={'group-row' + (g.include ? '' : ' off')} key={g.id}>
           <input type="checkbox" checked={sel.has(g.id)} onChange={() => toggle(g.id)} style={{ width: 'auto' }} />
           <span className="cnt">{g.count}×</span>
-          <BoundText type="text" path={`review.${i}.name`} value={g.name} />
-          <BoundText className="pts" type="number" num path={`review.${i}.points`} value={+g.points || 0} title="Points" />
+          <BoundText type="text" path={`reviews.${idx}.${i}.name`} value={g.name} />
+          <BoundText className="pts" type="number" num path={`reviews.${idx}.${i}.points`} value={+g.points || 0} title="Points" />
           <label style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-            <BoundCheckbox path={`review.${i}.include`} value={g.include} style={{ width: 'auto' }} />
+            <BoundCheckbox path={`reviews.${idx}.${i}.include`} value={g.include} style={{ width: 'auto' }} />
             show
           </label>
           <button className="icon-btn" onClick={() => ACT.grpUp(g.id)} title="Move up">
@@ -203,12 +213,15 @@ function Review({ S }) {
         </button>
       </div>
       <div className="row" style={{ marginTop: 14 }}>
-        <button className="btn btn-green btn-big" onClick={ACT.approveBoard}>
-          Approve and create board
-        </button>
-        <button className="btn btn-outline" onClick={ACT.resetResponses}>
-          Delete all responses
-        </button>
+        {mode === 'survey' ? (
+          <button className="btn btn-primary btn-big" onClick={ACT.closeReview}>
+            Done
+          </button>
+        ) : (
+          <button className="btn btn-green btn-big" onClick={ACT.approveBoard}>
+            Approve and create board
+          </button>
+        )}
       </div>
     </div>
   );
@@ -410,20 +423,31 @@ function SurveyProgress({ S, RESPALL }) {
   const rows = [];
   S.questions.forEach((q, idx) => {
     if (!q.text.trim()) return;
+    const count = Object.keys(RESPALL[idx] || {}).length;
     rows.push(
       <div
         key={q.id}
         className="row"
-        style={{ justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--ink-100)' }}
+        style={{ justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--ink-100)', gap: 8 }}
       >
-        <span style={{ fontSize: 13, flex: 1 }}>
+        <span style={{ fontSize: 13, flex: 1, minWidth: 120 }}>
           {rows.length + 1}. {q.text}
         </span>
-        <span className="cnt">{Object.keys(RESPALL[idx] || {}).length}</span>
+        <span className="cnt">{count}</span>
+        <button className="btn btn-sm btn-outline" onClick={() => ACT.openReview(idx)} disabled={!count}>
+          View &amp; edit answers
+        </button>
       </div>
     );
   });
-  return <div style={{ marginTop: 12 }}>{rows}</div>;
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className="hint" style={{ marginBottom: 4 }}>
+        Answers per question — open any to group spellings and set points before the game:
+      </div>
+      {rows}
+    </div>
+  );
 }
 
 export default function Live({ snap }) {
@@ -541,6 +565,11 @@ export default function Live({ snap }) {
         </div>
       )}
 
+      {/* SURVEY — review/edit a chosen question's answers while collecting */}
+      {S.survey.open && snap.REVIEW_Q != null && (
+        <Review S={S} idx={snap.REVIEW_Q} groups={S.reviews[snap.REVIEW_Q]} mode="survey" />
+      )}
+
       {/* PLAY — build the board for the current question */}
       {playing && S.phase === 'idle' && (
         <div className="panel">
@@ -567,7 +596,7 @@ export default function Live({ snap }) {
         </div>
       )}
 
-      {S.phase === 'review' && <Review S={S} />}
+      {playing && S.phase === 'review' && <Review S={S} idx={S.qIdx} groups={S.reviews[S.qIdx]} mode="play" />}
       {S.phase === 'board' && <Judge S={S} />}
 
       {S.phase === 'roundEnd' && (

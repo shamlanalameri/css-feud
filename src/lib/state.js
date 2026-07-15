@@ -20,7 +20,7 @@ export function defaultState(id, title) {
     stage: 'setup', // setup | survey | play
     phase: 'idle', // per-round while playing: idle | review | board | roundEnd | final
     survey: { open: false, endsAt: 0, session: 0 }, // the single all-questions survey
-    review: [],
+    reviews: {}, // per-question grouped answers, keyed by question index
     board: [],
     roundPoints: [0, 0],
     turn: null,
@@ -87,7 +87,15 @@ export function normalizeState(s) {
     notes: q.notes || '',
   }));
 
-  s.review = asArray(s.review);
+  // per-question reviews (object keyed by question index); migrate old single review
+  if (s.review && !s.reviews) {
+    s.reviews = {};
+    const arr = asArray(s.review);
+    if (arr.length) s.reviews[s.qIdx || 0] = arr;
+  }
+  if (!s.reviews || typeof s.reviews !== 'object') s.reviews = {};
+  Object.keys(s.reviews).forEach((k) => (s.reviews[k] = asArray(s.reviews[k])));
+  delete s.review;
   s.board = asArray(s.board);
   const rp = asArray(s.roundPoints);
   s.roundPoints = [+rp[0] || 0, +rp[1] || 0];
