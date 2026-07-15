@@ -32,11 +32,21 @@ export function defaultState(id, title) {
   };
 }
 
-// Upgrade a saved game to the current schema. Games saved by earlier versions
-// lack the `survey`/`stage` fields (they used surveyOpen/surveyEndsAt/…), which
-// would crash the new UI. Idempotent — safe to call on already-current state.
+// Firebase Realtime Database silently drops empty arrays/objects and turns
+// arrays into keyed objects, so a saved game can come back with missing
+// `players`, teams as an object, etc. This coerces anything back to an array.
+function asArray(v) {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') return Object.values(v);
+  return [];
+}
+
+// Upgrade + repair a saved game to the current schema. Guarantees exactly two
+// well-formed teams (5 players each), valid questions, and the survey/stage
+// fields the new UI needs. Idempotent — safe on already-current state.
 export function normalizeState(s) {
   if (!s || typeof s !== 'object') return s;
+
   if (!s.survey) {
     s.survey = { open: !!s.surveyOpen, endsAt: s.surveyEndsAt || 0, session: s.surveySession || 0 };
   }
@@ -46,16 +56,47 @@ export function normalizeState(s) {
     else if (['review', 'board', 'roundEnd', 'final'].includes(s.phase)) s.stage = 'play';
     else s.stage = 'setup';
   }
-  s.teams = s.teams || [];
-  s.questions = s.questions || [];
-  s.review = s.review || [];
-  s.board = s.board || [];
-  s.roundPoints = s.roundPoints || [0, 0];
-  s.buzz = s.buzz || { open: false, openedAt: 0 };
-  s.history = s.history || [];
-  s.log = s.log || [];
-  s.fx = s.fx || { n: 0, type: '' };
-  if (typeof s.qIdx !== 'number') s.qIdx = 0;
+
+  // Two teams, each with exactly five players — the part that was crashing.
+  const teams = asArray(s.teams);
+  const dflt = [
+    { name: 'Team 1', color: '#CBA344' },
+    { name: 'Team 2', color: '#4F98FF' },
+  ];
+  s.teams = [0, 1].map((i) => {
+    const t = teams[i] || {};
+    const players = asArray(t.players);
+    return {
+      name: t.name || dflt[i].name,
+      color: t.color || dflt[i].color,
+      logo: t.logo || '',
+      players: [0, 1, 2, 3, 4].map((j) => (players[j] != null ? String(players[j]) : '')),
+      score: +t.score || 0,
+      playerIdx: +t.playerIdx || 0,
+    };
+  });
+
+  s.questions = asArray(s.questions).map((q) => ({
+    id: q.id || uid(),
+    text: q.text || '',
+    category: q.category || '',
+    image: q.image || '',
+    timeLimit: +q.timeLimit || 0,
+    maxAnswers: +q.maxAnswers || 6,
+    preRaw: q.preRaw || '',
+    notes: q.notes || '',
+  }));
+
+  s.review = asArray(s.review);
+  s.board = asArray(s.board);
+  const rp = asArray(s.roundPoints);
+  s.roundPoints = [+rp[0] || 0, +rp[1] || 0];
+  s.buzz = s.buzz && typeof s.buzz === 'object' ? s.buzz : { open: false, openedAt: 0 };
+  s.history = asArray(s.history);
+  s.log = asArray(s.log);
+  s.fx = s.fx && typeof s.fx === 'object' ? s.fx : { n: 0, type: '' };
+  s.turn = s.turn === 0 || s.turn === 1 ? s.turn : null;
+  if (typeof s.qIdx !== 'number' || s.qIdx < 0 || s.qIdx >= s.questions.length) s.qIdx = 0;
   return s;
 }
 
