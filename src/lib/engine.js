@@ -20,7 +20,7 @@ import { defaultState, blankQ, demoState, starterQuestions, DEMO_POOLS, parsePre
 export const MODE = param('mode') || 'home';
 let GID = '',
   S = null,
-  RESP = {},
+  RESPALL = {}, // { qIdx: { deviceKey: {text, ts} } } for every question at once
   BUZZ = [],
   INDEX = {};
 let DEVICE = localStorage.getItem('cf:dev');
@@ -35,9 +35,9 @@ let UNDO = [],
 let lastFxN = 0,
   lastWinner = null,
   BANNER_UNTIL = 0,
-  RESPUNSUB = null,
-  SUBQ = -1,
   AUTOCLOSED = 0;
+let respUnsubs = [],
+  respSubCount = -1;
 let EDIT_Q = null; // expanded question editor index
 
 /* ========================= derived helpers ========================= */
@@ -46,10 +46,20 @@ export const tname = (i) => (S.teams[i] ? S.teams[i].name || 'Team ' + (i + 1) :
 export const baseURL = () => location.origin + location.pathname;
 export const surveyURL = () => baseURL() + '?mode=survey&game=' + GID;
 export const buzzerURL = (t) => baseURL() + '?mode=buzzer&team=' + t + '&game=' + GID;
-export const answeredKey = () => 'cf:answered:' + GID + ':' + (S ? S.qIdx : 0) + ':' + (S ? S.surveySession : 0);
+// One submission per device per survey run (covers all questions at once).
+export const answeredAllKey = () => 'cf:answeredall:' + GID + ':' + (S ? S.survey.session : 0);
 export const getGID = () => GID;
 export const getDevice = () => DEVICE;
 export { HAS_FB };
+
+// Response counts across all questions (used by the survey progress display).
+export const respMap = (i) => RESPALL[i] || {};
+export const respCount = (i) => Object.keys(RESPALL[i] || {}).length;
+export function totalRespondents() {
+  const set = new Set();
+  Object.values(RESPALL).forEach((m) => Object.keys(m || {}).forEach((k) => set.add(k)));
+  return set.size;
+}
 
 export function validPresses() {
   if (!S || !S.buzz) return [];
@@ -72,7 +82,8 @@ function buildSnapshot() {
   return {
     v: ++version,
     S,
-    RESP,
+    RESPALL,
+    RESP: (S && RESPALL[S.qIdx]) || {},
     BUZZ,
     INDEX,
     GID,
@@ -155,18 +166,28 @@ function handleRemote(st) {
     lastFxN = S.fx.n;
     runFx(S.fx);
   }
-  subResp();
+  subAllResp();
   emit();
 }
-function subResp() {
+// Subscribe to responses for every question at once, so counts and boards work
+// no matter which question the host is on. Re-subscribes when the question
+// count changes.
+function subAllResp() {
   if (!S) return;
-  if (SUBQ === S.qIdx) return;
-  SUBQ = S.qIdx;
-  if (RESPUNSUB) RESPUNSUB();
-  RESPUNSUB = Backend.onResp(GID, S.qIdx, (m) => {
-    RESP = m || {};
-    emit();
-  });
+  const n = S.questions.length;
+  if (respSubCount === n && respUnsubs.length) return;
+  respUnsubs.forEach((u) => u && u());
+  respUnsubs = [];
+  respSubCount = n;
+  RESPALL = {};
+  for (let i = 0; i < n; i++) {
+    const idx = i;
+    const un = Backend.onResp(GID, idx, (m) => {
+      RESPALL[idx] = m || {};
+      emit();
+    });
+    respUnsubs.push(un);
+  }
 }
 function handleBuzz() {
   const w = derivedWinner();
@@ -256,7 +277,7 @@ export const ACT = {
     S = st;
     UNDO = [];
     REDO = [];
-    SUBQ = -1;
+    respSubCount = -1;
     Backend.setActive(g);
     addLog('New game created');
     persist();
@@ -273,7 +294,7 @@ export const ACT = {
     Backend.setActive(GID);
     UNDO = [];
     REDO = [];
-    SUBQ = -1;
+    respSubCount = -1;
     lastFxN = S.fx ? S.fx.n : 0;
     wireGame();
     emit();
@@ -294,7 +315,6 @@ export const ACT = {
       S.roundPoints = [0, 0];
       S.turn = null;
       S.phase = 'idle';
-      S.surveyOpen = false;
       S.buzz = { open: false, openedAt: 0 };
     }, 'Question ' + (S.qIdx + 1) + ' reset');
   },
@@ -307,11 +327,11 @@ export const ACT = {
     }, 'Scores reset');
   },
   resetResponses() {
-    if (!confirm('Delete all survey responses for the current question?')) return;
-    Backend.clearResp(GID, S.qIdx);
+    if (!confirm('Delete ALL survey responses (every question)?')) return;
+    for (let i = 0; i < S.questions.length; i++) Backend.clearResp(GID, i);
     mutate(() => {
-      S.surveySession = (S.surveySession || 0) + 1;
-    }, 'Survey responses cleared for question ' + (S.qIdx + 1));
+      S.survey.session = (S.survey.session || 0) + 1;
+    }, 'All survey responses cleared');
   },
   resetAll() {
     if (!confirm('Reset the ENTIRE game? Teams and questions are kept; scores, boards, responses and the log are cleared.')) return;
@@ -323,8 +343,9 @@ export const ACT = {
         t.playerIdx = 0;
       });
       S.qIdx = 0;
+      S.stage = 'setup';
       S.phase = 'idle';
-      S.surveyOpen = false;
+      S.survey = { open: false, endsAt: 0, session: (S.survey.session || 0) + 1 };
       S.review = [];
       S.board = [];
       S.roundPoints = [0, 0];
@@ -332,7 +353,6 @@ export const ACT = {
       S.buzz = { open: false, openedAt: 0 };
       S.history = [];
       S.log = [];
-      S.surveySession = (S.surveySession || 0) + 1;
     }, 'Full game reset');
   },
   loadDemo() {
@@ -342,7 +362,7 @@ export const ACT = {
     DEMO_POOLS[0].forEach((t, i) => Backend.submitResp('demo', 0, 'demo' + i, t));
     UNDO = [];
     REDO = [];
-    SUBQ = -1;
+    respSubCount = -1;
     addLog('Demo game loaded (with sample responses for question 1)');
     persist();
     wireGame();
@@ -403,7 +423,6 @@ export const ACT = {
     mutate(() => {
       S.qIdx = +i;
       S.phase = 'idle';
-      S.surveyOpen = false;
       S.review = [];
       S.board = [];
       S.roundPoints = [0, 0];
@@ -413,38 +432,53 @@ export const ACT = {
   },
 
   /* --- live flow --- */
-  startSurvey() {
-    const q = curQ();
-    if (!q || !q.text.trim()) {
-      toast('Write the question text first (Questions tab)');
+  // Phase 1: open ONE survey covering every question. Employees answer them all.
+  openSurvey() {
+    const withText = S.questions.filter((q) => q.text.trim()).length;
+    if (!withText) {
+      toast('Add at least one question with text first (Questions tab)');
       return;
     }
-    AUTOCLOSED = 0;
     mutate(() => {
-      S.phase = 'survey';
-      S.surveyOpen = true;
-      S.surveyEndsAt = q.timeLimit ? Backend.now() + q.timeLimit * 1000 : 0;
+      S.stage = 'survey';
+      S.survey = { open: true, endsAt: 0, session: S.survey.session || 0 };
+      S.qIdx = 0;
+      S.phase = 'idle';
       S.review = [];
       S.board = [];
       S.roundPoints = [0, 0];
       S.turn = null;
       S.buzz = { open: false, openedAt: 0 };
-    }, 'Survey opened for question ' + (S.qIdx + 1));
+    }, 'Survey opened for all ' + S.questions.length + ' questions');
   },
+  // Close the survey and move into the play stage (build boards, buzz, score).
   closeSurvey() {
     mutate(() => {
-      S.surveyOpen = false;
+      S.survey.open = false;
+      S.stage = 'play';
+      S.qIdx = 0;
+      S.phase = 'idle';
+    }, 'Survey closed — ' + totalRespondents() + ' people answered');
+  },
+  // Phase 2, per question: build the answer board from that question's responses.
+  buildBoard() {
+    mutate(() => {
+      S.review = buildGroups(curQ(), RESPALL[S.qIdx] || {});
       S.phase = 'review';
-      S.review = buildGroups(curQ(), RESP);
-    }, 'Survey closed — ' + Object.keys(RESP).length + ' responses collected');
+    }, 'Building the board for question ' + (S.qIdx + 1));
   },
   simResponses() {
-    const pool = DEMO_POOLS[S.qIdx % DEMO_POOLS.length];
-    for (let i = 0; i < 14; i++) {
-      const t = pool[Math.floor(Math.random() * pool.length)];
-      Backend.submitResp(GID, S.qIdx, 'sim' + uid(), t);
+    // Simulate 14 people, each answering every question once (for rehearsing
+    // the flow without real phones).
+    for (let d = 0; d < 14; d++) {
+      const dev = 'sim' + uid();
+      S.questions.forEach((q, qi) => {
+        const pool = DEMO_POOLS[qi % DEMO_POOLS.length];
+        const t = pool[Math.floor(Math.random() * pool.length)];
+        Backend.submitResp(GID, qi, dev, t);
+      });
     }
-    toast('14 simulated responses added');
+    toast('14 simulated people answered');
   },
   boardFromPre() {
     const q = curQ();
@@ -453,9 +487,8 @@ export const ACT = {
       return;
     }
     mutate(() => {
-      S.surveyOpen = false;
       S.phase = 'review';
-      S.review = buildGroups(curQ(), RESP);
+      S.review = buildGroups(curQ(), RESPALL[S.qIdx] || {});
     }, 'Review opened from pre-approved answers');
   },
   approveBoard() {
@@ -714,7 +747,6 @@ export const ACT = {
     mutate(() => {
       S.qIdx++;
       S.phase = 'idle';
-      S.surveyOpen = false;
       S.review = [];
       S.board = [];
       S.roundPoints = [0, 0];
@@ -778,19 +810,23 @@ export const ACT = {
   },
 
   /* --- survey --- */
-  submitSurvey(value) {
-    const v = String(value || '').replace(/\s+/g, ' ').trim();
-    if (!v) {
-      toast('Please type an answer first');
-      return false;
-    }
-    if (!S.surveyOpen) {
-      toast('The survey has just closed');
+  // answers: { qIdx: text } — one submission covers every question at once.
+  submitSurveyAll(answers) {
+    if (!S.survey.open) {
+      toast('The survey has closed');
       emit();
       return false;
     }
-    Backend.submitResp(GID, S.qIdx, DEVICE + '_' + (S.surveySession || 0), v.slice(0, 60));
-    localStorage.setItem(answeredKey(), '1');
+    const entries = Object.entries(answers || {}).filter(([, t]) => String(t || '').trim());
+    if (!entries.length) {
+      toast('Please answer at least one question');
+      return false;
+    }
+    const dev = DEVICE + '_' + (S.survey.session || 0);
+    entries.forEach(([i, t]) =>
+      Backend.submitResp(GID, +i, dev, String(t).replace(/\s+/g, ' ').trim().slice(0, 60))
+    );
+    localStorage.setItem(answeredAllKey(), '1');
     SND.correct();
     emit();
     return true;
@@ -807,7 +843,7 @@ export function importJson(file) {
       st.id = st.id || 'g' + Date.now().toString(36);
       GID = st.id;
       S = st;
-      SUBQ = -1;
+      respSubCount = -1;
       Backend.setActive(GID);
       addLog('Game imported from JSON');
       persist();
@@ -827,8 +863,8 @@ function wireGame() {
     BUZZ = (list || []).sort((a, b) => a.t - b.t);
     handleBuzz();
   });
-  SUBQ = -1;
-  subResp();
+  respSubCount = -1;
+  subAllResp();
   refreshIndex();
 }
 async function refreshIndex() {
@@ -840,23 +876,24 @@ async function refreshIndex() {
   emit();
 }
 
-// Survey countdown + auto-close. Called on an interval from App.
+// Optional survey countdown. The all-questions survey is normally closed
+// manually by the host, so this only ticks if an end time was ever set.
 export function pollTimers() {
   if (!S) return;
-  if (S.surveyOpen && S.surveyEndsAt) {
-    const left = Math.max(0, Math.ceil((S.surveyEndsAt - Backend.now()) / 1000));
-    if (left <= 0 && MODE === 'admin' && ADMIN_OK && AUTOCLOSED !== S.qIdx + 1) {
-      AUTOCLOSED = S.qIdx + 1;
+  if (S.survey && S.survey.open && S.survey.endsAt) {
+    const left = Math.max(0, Math.ceil((S.survey.endsAt - Backend.now()) / 1000));
+    if (left <= 0 && MODE === 'admin' && ADMIN_OK && AUTOCLOSED !== S.survey.session + 1) {
+      AUTOCLOSED = S.survey.session + 1;
       ACT.closeSurvey();
       toast('Time is up — survey closed automatically');
     } else {
-      emit(); // refresh the countdown chip each tick
+      emit();
     }
   }
 }
 export function surveySecondsLeft() {
-  if (!S || !S.surveyOpen || !S.surveyEndsAt) return null;
-  return Math.max(0, Math.ceil((S.surveyEndsAt - Backend.now()) / 1000));
+  if (!S || !S.survey || !S.survey.open || !S.survey.endsAt) return null;
+  return Math.max(0, Math.ceil((S.survey.endsAt - Backend.now()) / 1000));
 }
 
 // Global keyboard shortcuts: 1 / 2 buzz, B resets (game + admin screens).

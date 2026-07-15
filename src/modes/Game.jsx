@@ -1,6 +1,6 @@
 import React from 'react';
 import { Logo, QR } from '../components/common.jsx';
-import { ACT, tname, curQ, derivedWinner, gameProgress, surveyURL, surveySecondsLeft } from '../lib/engine.js';
+import { ACT, tname, curQ, derivedWinner, gameProgress, surveyURL, surveySecondsLeft, totalRespondents } from '../lib/engine.js';
 
 function TeamPanel({ snap, i }) {
   const S = snap.S;
@@ -142,43 +142,42 @@ function FinalOverlay({ snap }) {
 export default function Game({ snap }) {
   const S = snap.S;
   const q = curQ();
-  const n = Object.keys(snap.RESP).length;
+  const people = totalRespondents();
   const secs = surveySecondsLeft();
 
   let center;
-  if (!q || S.phase === 'idle') {
+  if (S.survey.open) {
+    // Phase 1 — one QR, employees answer every question
+    const nQ = S.questions.filter((x) => x.text.trim()).length;
+    center = (
+      <div className="qr-stage">
+        <div className="qr-white">
+          <QR text={surveyURL()} size={250} />
+        </div>
+        <div className="qr-side">
+          <h3>Scan the QR code and answer all {nQ} questions</h3>
+          <div className="joincode">{S.joinCode}</div>
+          <div className="cnt-line">
+            <b>{people}</b> {people === 1 ? 'person has' : 'people have'} answered
+            {secs != null && (
+              <>
+                {' · '}
+                <span className="timer-chip">{secs}</span>s left
+              </>
+            )}
+          </div>
+          <div style={{ color: 'var(--blue-300)', fontSize: 13.5, marginTop: 6 }}>
+            All answers stay secret until the host starts the game.
+          </div>
+        </div>
+      </div>
+    );
+  } else if (!q || S.stage === 'setup') {
     center = (
       <div className="idle-hero">
         <Logo />
-        <p>{q ? 'Get ready — question ' + (S.qIdx + 1) + ' is coming up' : 'Waiting for the host to set up the game'}</p>
+        <p>{S.questions.length ? 'Get ready — the game is about to start' : 'Waiting for the host to set up the game'}</p>
       </div>
-    );
-  } else if (S.phase === 'survey') {
-    center = (
-      <>
-        <QBanner snap={snap} />
-        <div className="qr-stage">
-          <div className="qr-white">
-            <QR text={surveyURL()} size={230} />
-          </div>
-          <div className="qr-side">
-            <h3>Scan the QR code and submit your answer</h3>
-            <div className="joincode">{S.joinCode}</div>
-            <div className="cnt-line">
-              <b>{n}</b> answer{n === 1 ? '' : 's'} received
-              {secs != null && (
-                <>
-                  {' · '}
-                  <span className="timer-chip">{secs}</span>s left
-                </>
-              )}
-            </div>
-            <div style={{ color: 'var(--blue-300)', fontSize: 13.5, marginTop: 6 }}>
-              Answers stay secret until the host builds the board.
-            </div>
-          </div>
-        </div>
-      </>
     );
   } else if (S.phase === 'review') {
     center = (
@@ -191,15 +190,25 @@ export default function Game({ snap }) {
             <span className="waiting-dot" />
             <span className="waiting-dot" />
           </h3>
-          <p>{n} answers were submitted</p>
         </div>
       </>
     );
-  } else {
+  } else if (S.phase === 'board' || S.phase === 'roundEnd') {
     center = (
       <>
         <QBanner snap={snap} />
         <BoardGrid snap={snap} />
+      </>
+    );
+  } else {
+    // play stage, phase idle — round about to begin
+    center = (
+      <>
+        <QBanner snap={snap} />
+        <div className="idle-hero" style={{ flex: 1 }}>
+          <h3 style={{ fontSize: 'clamp(20px,2.6vw,32px)' }}>Get ready for round {S.qIdx + 1}</h3>
+          <p>The host is preparing the answer board</p>
+        </div>
       </>
     );
   }
@@ -267,7 +276,11 @@ export default function Game({ snap }) {
         <div>
           <div className="stage-title">{S.title}</div>
           <div className="stage-progress">
-            Question {Math.min(S.qIdx + 1, S.questions.length)} of {S.questions.length} · {gameProgress()}
+            {S.survey.open
+              ? 'Live survey — answer on your phone'
+              : S.stage === 'setup'
+                ? 'Getting ready'
+                : 'Round ' + Math.min(S.qIdx + 1, S.questions.length) + ' of ' + S.questions.length + ' · ' + gameProgress()}
           </div>
         </div>
         <div className="stage-tools">
@@ -285,15 +298,18 @@ export default function Game({ snap }) {
         <TeamPanel snap={snap} i={1} />
       </div>
       <div className="stage-status">
-        {buzzChip}
-        <div className="status-chip">
-          Round points: {tname(0)} {S.roundPoints[0]} — {S.roundPoints[1]} {tname(1)}
-        </div>
-        {S.phase === 'survey' && (
-          <div className="status-chip">
-            <span className="status-dot" />
-            Survey open — {n} responses
+        {S.survey.open ? (
+          <div className="status-chip hot">
+            <span className="status-dot hot" />
+            Survey open — {people} {people === 1 ? 'person' : 'people'} answered
           </div>
+        ) : (
+          <>
+            {buzzChip}
+            <div className="status-chip">
+              Round points: {tname(0)} {S.roundPoints[0]} — {S.roundPoints[1]} {tname(1)}
+            </div>
+          </>
         )}
       </div>
       {mainBuzz}

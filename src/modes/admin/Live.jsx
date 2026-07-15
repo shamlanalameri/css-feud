@@ -10,19 +10,25 @@ import {
   surveyURL,
   buzzerURL,
   surveySecondsLeft,
+  totalRespondents,
+  respCount,
 } from '../../lib/engine.js';
 import { parsePre, mergeSuggestions } from '../../lib/state.js';
 
 function PhasePill({ S }) {
-  const map = {
-    idle: ['pill-grey', 'Waiting to start question'],
-    survey: ['pill-blue', 'Survey open'],
-    review: ['pill-gold', 'Reviewing answers (private)'],
-    board: ['pill-green', 'Round in play'],
-    roundEnd: ['pill-gold', 'Round results'],
-    final: ['pill-gold', 'Final leaderboard'],
-  };
-  const m = map[S.phase] || map.idle;
+  let m;
+  if (S.survey.open) m = ['pill-blue', 'Survey open'];
+  else if (S.stage === 'setup') m = ['pill-grey', 'Setup'];
+  else {
+    const map = {
+      idle: ['pill-grey', 'Ready to build board'],
+      review: ['pill-gold', 'Reviewing answers (private)'],
+      board: ['pill-green', 'Round in play'],
+      roundEnd: ['pill-gold', 'Round results'],
+      final: ['pill-gold', 'Final leaderboard'],
+    };
+    m = map[S.phase] || map.idle;
+  }
   return (
     <>
       <span className={'pill ' + m[0]}>{m[1]}</span>
@@ -94,7 +100,7 @@ function Scores({ S }) {
   );
 }
 
-function Review({ S, RESP }) {
+function Review({ S }) {
   const [sel, setSel] = useState(() => new Set());
   const [newText, setNewText] = useState('');
   const [newPts, setNewPts] = useState('');
@@ -400,12 +406,33 @@ function FinalTable({ S }) {
   );
 }
 
+function SurveyProgress({ S, RESPALL }) {
+  const rows = [];
+  S.questions.forEach((q, idx) => {
+    if (!q.text.trim()) return;
+    rows.push(
+      <div
+        key={q.id}
+        className="row"
+        style={{ justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid var(--ink-100)' }}
+      >
+        <span style={{ fontSize: 13, flex: 1 }}>
+          {rows.length + 1}. {q.text}
+        </span>
+        <span className="cnt">{Object.keys(RESPALL[idx] || {}).length}</span>
+      </div>
+    );
+  });
+  return <div style={{ marginTop: 12 }}>{rows}</div>;
+}
+
 export default function Live({ snap }) {
   const S = snap.S;
-  const RESP = snap.RESP;
   const q = curQ();
-  const n = Object.keys(RESP).length;
+  const people = totalRespondents();
   const secs = surveySecondsLeft();
+  const nQ = S.questions.filter((x) => x.text.trim()).length;
+  const playing = S.stage === 'play';
 
   return (
     <>
@@ -413,12 +440,18 @@ export default function Live({ snap }) {
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <div>
             <h3 style={{ fontSize: 17 }}>
-              Question {S.questions.length ? S.qIdx + 1 : 0} of {S.questions.length}
+              {playing ? `Round ${S.qIdx + 1} of ${S.questions.length}` : `${nQ} question${nQ === 1 ? '' : 's'} ready`}
             </h3>
             <div style={{ fontSize: 15, marginTop: 4 }}>
-              {q ? q.text || <i>(no text yet — add it in the Questions tab)</i> : <i>No questions yet — add one in the Questions tab.</i>}
+              {playing ? (
+                q ? q.text || <i>(no text)</i> : <i>No questions.</i>
+              ) : S.survey.open ? (
+                <i>Survey is open — employees are answering on their phones.</i>
+              ) : (
+                <i>Set up teams and questions, then open the survey below.</i>
+              )}
             </div>
-            {q && q.notes && (
+            {playing && q && q.notes && (
               <div className="hint" style={{ marginTop: 6 }}>
                 Judge notes: {q.notes}
               </div>
@@ -433,12 +466,16 @@ export default function Live({ snap }) {
               <button className="btn btn-sm btn-outline" onClick={ACT.redo}>
                 ↷ Redo
               </button>
-              <button className="btn btn-sm btn-outline" onClick={ACT.pause}>
-                {S.paused ? 'Resume' : 'Pause'}
-              </button>
-              <button className="btn btn-sm btn-outline" onClick={ACT.skipQuestion}>
-                Skip question
-              </button>
+              {playing && (
+                <>
+                  <button className="btn btn-sm btn-outline" onClick={ACT.pause}>
+                    {S.paused ? 'Resume' : 'Pause'}
+                  </button>
+                  <button className="btn btn-sm btn-outline" onClick={ACT.skipQuestion}>
+                    Skip question
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -446,65 +483,91 @@ export default function Live({ snap }) {
 
       <Scores S={S} />
 
-      {(S.phase === 'idle' || !S.phase) && (
+      {/* SETUP — open the one survey covering all questions */}
+      {S.stage === 'setup' && !S.survey.open && (
         <div className="panel">
-          <h3>Start this question</h3>
+          <h3>Step 1 — collect answers</h3>
           <p className="hint">
-            Opens the survey: the main screen shows the question with a QR code, and employees submit answers from their
-            phones.
+            Open the survey so employees can answer <b>all {nQ} questions</b> from their phones. One QR code appears on
+            the main screen — everyone scans it, answers, and submits once. Their answers stay hidden.
           </p>
           <div className="row">
-            <button className="btn btn-primary btn-big" onClick={ACT.startSurvey}>
-              Start survey
+            <button className="btn btn-primary btn-big" onClick={ACT.openSurvey}>
+              Open survey (all questions)
+            </button>
+            <button className="btn btn-outline" onClick={ACT.simResponses}>
+              Simulate answers (for testing)
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SURVEY OPEN — waiting for responses across all questions */}
+      {S.survey.open && (
+        <div className="panel">
+          <h3>Survey is open</h3>
+          <div className="row" style={{ gap: 26, alignItems: 'flex-start' }}>
+            <div style={{ textAlign: 'center' }}>
+              <div className="bigcount">{people}</div>
+              <div className="hint">people answered</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 220 }}>
+              <p className="hint">
+                Employees scan the QR on the main screen and answer all {nQ} questions. Answers stay hidden until you
+                close the survey.{' '}
+                {secs != null && (
+                  <>
+                    Auto-closes in <span className="timer-chip">{secs}</span>s.
+                  </>
+                )}
+              </p>
+              <div className="row">
+                <button className="btn btn-red btn-big" onClick={ACT.closeSurvey}>
+                  Close survey and start the game
+                </button>
+                <button className="btn btn-outline" onClick={ACT.simResponses}>
+                  Simulate answers
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => ACT.copy(surveyURL())}>
+                  Copy survey link
+                </button>
+              </div>
+              <SurveyProgress S={S} RESPALL={snap.RESPALL} />
+            </div>
+            <div className="qrbox-admin">
+              <QR text={surveyURL()} size={120} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PLAY — build the board for the current question */}
+      {playing && S.phase === 'idle' && (
+        <div className="panel">
+          <h3>Round {S.qIdx + 1} — build the answer board</h3>
+          <p className="hint">
+            {respCount(S.qIdx)} answer{respCount(S.qIdx) === 1 ? '' : 's'} were submitted for this question. Group them
+            into the board, then reveal and play.
+          </p>
+          <div className="row">
+            <button className="btn btn-primary btn-big" onClick={ACT.buildBoard}>
+              Build the answer board
             </button>
             {q && parsePre(q).length > 0 && (
               <button className="btn btn-outline" onClick={ACT.boardFromPre}>
-                Build board from pre-approved answers
+                Use pre-approved answers
+              </button>
+            )}
+            {S.qIdx < S.questions.length - 1 && (
+              <button className="btn btn-outline" onClick={() => ACT.nextQuestion()}>
+                Skip to next question →
               </button>
             )}
           </div>
         </div>
       )}
 
-      {S.phase === 'survey' && (
-        <div className="panel">
-          <h3>Survey is open</h3>
-          <div className="row" style={{ gap: 26, alignItems: 'flex-start' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div className="bigcount">{n}</div>
-              <div className="hint">responses so far</div>
-            </div>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <p className="hint">
-                Answers stay hidden until you close the survey.{' '}
-                {S.surveyEndsAt ? (
-                  <>
-                    Auto-closes when the timer ends (<span className="timer-chip">{secs}</span>s left).
-                  </>
-                ) : (
-                  'No time limit set.'
-                )}
-              </p>
-              <div className="row">
-                <button className="btn btn-red btn-big" onClick={ACT.closeSurvey}>
-                  Close survey and review answers
-                </button>
-                <button className="btn btn-outline" onClick={ACT.simResponses}>
-                  Simulate 14 responses
-                </button>
-                <button className="btn btn-outline btn-sm" onClick={() => ACT.copy(surveyURL())}>
-                  Copy survey link
-                </button>
-              </div>
-            </div>
-            <div className="qrbox-admin">
-              <QR text={surveyURL()} size={110} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {S.phase === 'review' && <Review S={S} RESP={RESP} />}
+      {S.phase === 'review' && <Review S={S} />}
       {S.phase === 'board' && <Judge S={S} />}
 
       {S.phase === 'roundEnd' && (
@@ -548,7 +611,7 @@ export default function Live({ snap }) {
         </div>
       )}
 
-      <BuzzPanel S={S} />
+      {playing && <BuzzPanel S={S} />}
     </>
   );
 }

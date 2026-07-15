@@ -16,10 +16,10 @@ export function defaultState(id, title) {
     ],
     questions: [],
     qIdx: 0,
-    phase: 'idle', // idle | survey | review | board | roundEnd | final
-    surveyOpen: false,
-    surveyEndsAt: 0,
-    surveySession: 0,
+    // stage drives the whole event: setup -> survey (all questions) -> play (rounds)
+    stage: 'setup', // setup | survey | play
+    phase: 'idle', // per-round while playing: idle | review | board | roundEnd | final
+    survey: { open: false, endsAt: 0, session: 0 }, // the single all-questions survey
     review: [],
     board: [],
     roundPoints: [0, 0],
