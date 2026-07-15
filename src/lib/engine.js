@@ -14,7 +14,7 @@ import { Backend } from './backend.js';
 import { uid, param, clone, setPath, fmtT, toast, download, normTxt } from './utils.js';
 import { SND, isMuted, toggleMuted } from './sound.js';
 import { confetti } from './confetti.js';
-import { defaultState, blankQ, demoState, DEMO_POOLS, parsePre, buildGroups } from './state.js';
+import { defaultState, blankQ, demoState, starterQuestions, DEMO_POOLS, parsePre, buildGroups } from './state.js';
 
 /* ========================= app globals ========================= */
 export const MODE = param('mode') || 'home';
@@ -251,7 +251,7 @@ export const ACT = {
     if (title === null) return;
     const g = 'g' + Date.now().toString(36);
     const st = defaultState(g, title.trim() || 'CSS Feud');
-    st.questions = [blankQ('')];
+    st.questions = starterQuestions();
     GID = g;
     S = st;
     UNDO = [];
@@ -883,8 +883,10 @@ export async function boot() {
   S = await Backend.loadState(GID);
   if (!S) {
     if (GID === 'demo') {
+      // Default landing game: demo teams + questions, but NO pre-filled answers,
+      // so the survey counter starts live at 0. The "Load demo game" button in
+      // Setup still seeds sample answers for practising the grouping step.
       S = demoState();
-      DEMO_POOLS[0].forEach((t, i) => Backend.submitResp('demo', 0, 'demo' + i, t));
       addLog('Demo game created');
     } else S = defaultState(GID);
     S.rev = 1;

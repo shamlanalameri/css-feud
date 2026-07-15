@@ -36,6 +36,18 @@ export function blankQ(text) {
   return { id: uid(), text: text || '', category: '', image: '', timeLimit: 0, maxAnswers: 6, preRaw: '', notes: '' };
 }
 
+// Starter questions for a freshly created game — ready to edit or delete, so a
+// new game has something to advance through instead of a single blank question.
+export function starterQuestions() {
+  return [
+    "What is Fouzia's favourite colour?",
+    "What is Ali's favourite football team?",
+    'What is the first thing employees do when they arrive at the office?',
+    'Name something employees always forget before a meeting.',
+    'What is the most popular lunch order in the office?',
+  ].map((t) => blankQ(t));
+}
+
 export function demoState() {
   const s = defaultState('demo', 'CSS Feud — demo game');
   s.demo = true;
