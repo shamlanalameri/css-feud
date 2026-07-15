@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CSS Feud</title>
+<!--
+  ============================================================
+  CSS FEUD — live employee game show
+  One file. Five modes via URL:
+    index.html?mode=admin           Admin / host / judge portal (password: see CONFIG)
+    index.html?mode=game            Main screen for the big display
+    index.html?mode=survey          Employee survey page (via QR)
+    index.html?mode=buzzer&team=1   Team 1 buzzer
+    index.html?mode=buzzer&team=2   Team 2 buzzer
+
+  FIREBASE SETUP (for multi-device play):
+    1. console.firebase.google.com → Add project (any name).
+    2. Build → Realtime Database → Create database → start in TEST mode.
+    3. Build → Authentication → Sign-in method → enable "Anonymous".
+    4. Project settings → General → Your apps → Web app → copy the config
+       object and paste it into FIREBASE_CONFIG in the CONFIG section below.
+    5. Host this file anywhere (see below) and open it — the app detects the
+       config and switches from local demo mode to live Firebase sync.
+
+  HOSTING (pick one):
+    • Firebase Hosting: npm i -g firebase-tools → firebase init hosting
+      (public dir = folder with this file) → firebase deploy
+    • GitHub Pages: push index.html + css-feud-logo.png to a repo →
+      Settings → Pages → deploy from branch.
+    • Netlify: drag the folder onto app.netlify.com/drop.
+    Phones must reach the SAME URL the QR codes encode, so use a public URL
+    (not localhost) for the live event.
+
+  Without Firebase the game runs in LOCAL DEMO MODE: everything works across
+  tabs of the same browser (admin + game + survey + buzzers), synced through
+  localStorage — perfect for rehearsal.
+  ============================================================
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ================= AEGov DLS tokens ================= */
+:root{
+  --gold-200:#E6D7A2; --gold-300:#D7BC6D; --gold-400:#CBA344; --gold-500:#B68A35; --gold-600:#92722A; --gold-700:#7C5E24;
+  --blue-100:#D3EDFF; --blue-200:#B0DBFF; --blue-300:#81C1FF; --blue-400:#4F98FF; --blue-500:#286CFF; --blue-900:#0B32A4; --blue-950:#071C5F;
+  --ink-50:#F7F7F7; --ink-100:#E1E3E5; --ink-200:#C3C6CB; --ink-300:#9EA2A9; --ink-400:#797E86; --ink-500:#5F646D; --ink-700:#3E4046; --ink-800:#232528; --ink-900:#1B1D21; --ink-950:#0E0F12;
+  --red-400:#F47A75; --red-500:#EA4F49; --red-600:#D83731; --red-700:#B52520;
+  --green-500:#4A9D5C; --green-600:#3F8E50; --green-100:#E4F4E7;
+  --camel-300:#FAD44F; --camel-400:#F8C027;
+  --navy-1:#0A1638; --navy-2:#0E2158; --navy-3:#143079;
+  --stage-bg: radial-gradient(130% 90% at 50% -12%, var(--navy-3) 0%, var(--navy-2) 42%, var(--navy-1) 78%, #060C22 100%);
+  --card-radius:14px;
+}
+*{box-sizing:border-box} html,body{margin:0;padding:0}
+body{font-family:Roboto,system-ui,sans-serif;color:var(--ink-800);background:var(--ink-50);-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:Inter,system-ui,sans-serif;margin:0}
+a{color:var(--blue-500);text-decoration:none} a:hover{color:var(--blue-900);text-decoration:underline}
+button{font-family:Inter,system-ui,sans-serif;cursor:pointer;border:none}
+input,select,textarea{font-family:Roboto,system-ui,sans-serif;font-size:15px;padding:9px 12px;border:1.5px solid var(--ink-200);border-radius:8px;background:#fff;color:var(--ink-800);width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--gold-400);outline-offset:1px;border-color:var(--gold-400)}
+label{font-size:12.5px;font-weight:600;color:var(--ink-500);display:block;margin:10px 0 4px}
+::placeholder{color:var(--ink-300)}
+
+/* ================= buttons ================= */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;font-weight:700;font-size:14.5px;padding:10px 20px;transition:background .15s,transform .1s;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--gold-600);color:#fff}.btn-primary:hover{background:var(--gold-700)}
+.btn-blue{background:var(--blue-500);color:#fff}.btn-blue:hover{background:var(--blue-900)}
+.btn-green{background:var(--green-600);color:#fff}.btn-green:hover{background:#2F663C}
+.btn-red{background:var(--red-600);color:#fff}.btn-red:hover{background:var(--red-700)}
+.btn-outline{background:#fff;color:var(--ink-800);border:1.5px solid var(--ink-200)}.btn-outline:hover{border-color:var(--gold-500);color:var(--gold-700)}
+.btn-ghost{background:transparent;color:var(--ink-500)}.btn-ghost:hover{background:var(--ink-100)}
+.btn-big{font-size:17px;padding:14px 28px}
+.btn-sm{font-size:12.5px;padding:6px 13px}
+.btn[disabled]{opacity:.45;cursor:not-allowed;pointer-events:none}
+
+/* ================= launcher ================= */
+.launch{min-height:100vh;background:var(--stage-bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;gap:6px}
+.launch img{width:min(340px,70vw);filter:drop-shadow(0 18px 40px rgba(0,0,0,.5))}
+.launch p{color:var(--blue-200);margin:6px 0 22px;font-size:15px}
+.launch-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;width:min(880px,100%)}
+.launch-card{background:rgba(255,255,255,.06);border:1.5px solid rgba(129,193,255,.25);border-radius:var(--card-radius);padding:20px;color:#fff;display:flex;flex-direction:column;gap:6px;transition:.15s}
+.launch-card:hover{background:rgba(255,255,255,.11);border-color:var(--gold-400);text-decoration:none;color:#fff;transform:translateY(-2px)}
+.launch-card b{font-family:Inter;font-size:17px}
+.launch-card span{font-size:13px;color:var(--blue-200)}
+.launch-mode-tag{font-size:11px;letter-spacing:.08em;color:var(--gold-300);font-weight:700}
+
+/* ================= admin ================= */
+.admin{min-height:100vh;background:var(--ink-50)}
+.admin-top{background:var(--ink-900);color:#fff;padding:10px 22px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:40}
+.admin-top img{height:44px}
+.admin-top .ttl{font-family:Inter;font-weight:800;font-size:17px}
+.admin-top .sub{font-size:12px;color:var(--ink-300)}
+.tabs{display:flex;gap:4px;background:#fff;border-bottom:1.5px solid var(--ink-100);padding:0 18px;overflow-x:auto;position:sticky;top:64px;z-index:39}
+.tab{padding:13px 16px;font-family:Inter;font-weight:600;font-size:13.5px;color:var(--ink-500);border-bottom:3px solid transparent;background:none;white-space:nowrap}
+.tab:hover{color:var(--ink-800)}
+.tab.on{color:var(--gold-700);border-bottom-color:var(--gold-500)}
+.admin-body{padding:20px;max-width:1240px;margin:0 auto}
+.panel{background:#fff;border:1.5px solid var(--ink-100);border-radius:12px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.panel h3{font-size:15px;font-weight:800;margin-bottom:4px}
+.panel .hint{font-size:12.5px;color:var(--ink-400);margin:2px 0 10px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:820px){.grid2{grid-template-columns:1fr}}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700}
+.pill-gold{background:#F9F7ED;color:var(--gold-700);border:1px solid var(--gold-200)}
+.pill-blue{background:var(--blue-100);color:var(--blue-900)}
+.pill-green{background:var(--green-100);color:#2F663C}
+.pill-red{background:#FDE4E3;color:var(--red-700)}
+.pill-grey{background:var(--ink-100);color:var(--ink-500)}
+.bigcount{font-family:Inter;font-weight:900;font-size:56px;color:var(--gold-600);line-height:1}
+.qitem{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--ink-100);border-radius:10px;padding:12px;margin-bottom:10px;background:#fff}
+.qitem.cur{border-color:var(--gold-400);background:#FDFBF3}
+.qnum{font-family:Inter;font-weight:800;color:var(--gold-600);min-width:26px;padding-top:2px}
+.icon-btn{background:none;border:1px solid var(--ink-200);border-radius:8px;width:30px;height:30px;font-size:14px;color:var(--ink-500);line-height:1}
+.icon-btn:hover{border-color:var(--gold-500);color:var(--gold-700)}
+.group-row{display:flex;gap:8px;align-items:center;padding:8px 10px;border:1.5px solid var(--ink-100);border-radius:10px;margin-bottom:8px;background:#fff;flex-wrap:wrap}
+.group-row.off{opacity:.45}
+.group-row input[type=text]{flex:1;min-width:140px}
+.group-row .cnt{font-family:Inter;font-weight:800;color:var(--blue-900);background:var(--blue-100);border-radius:8px;padding:4px 10px;font-size:13px;white-space:nowrap}
+.group-row input.pts{width:74px;text-align:center;font-weight:700}
+.members{font-size:11.5px;color:var(--ink-400);width:100%;padding-left:2px}
+.judge-answer{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--ink-100);border-radius:10px;margin-bottom:8px;flex-wrap:wrap}
+.judge-answer.rev{background:#F3FAF4;border-color:#CAE8CF}
+.judge-answer .atext{font-weight:700;flex:1;min-width:120px}
+.logrow{font-size:12.5px;padding:7px 4px;border-bottom:1px solid var(--ink-100);display:flex;gap:10px}
+.logrow time{color:var(--ink-400);white-space:nowrap;font-variant-numeric:tabular-nums}
+.danger-zone{border-color:#FDCDCB;background:#FFF8F8}
+table.scores-t{width:100%;border-collapse:collapse;font-size:14px}
+table.scores-t td,table.scores-t th{padding:8px 10px;border-bottom:1px solid var(--ink-100);text-align:left}
+.login-wrap{min-height:100vh;background:var(--stage-bg);display:flex;align-items:center;justify-content:center;padding:24px}
+.login-card{background:#fff;border-radius:16px;padding:34px;width:min(400px,100%);box-shadow:0 12px 28px rgba(0,0,0,.35);text-align:center}
+.login-card img{width:190px;margin-bottom:8px}
+.qrbox-admin{background:#fff;border:1.5px solid var(--ink-100);border-radius:12px;padding:12px;display:inline-block}
+.notice{border:1.5px solid var(--camel-300);background:#FFFBEB;border-radius:10px;padding:10px 14px;font-size:13px;color:#773610;margin-bottom:12px}
+.helpdoc{font-size:13.5px;line-height:1.65;color:var(--ink-700)}
+.helpdoc code{background:var(--ink-100);border-radius:5px;padding:1px 6px;font-size:12px}
+.helpdoc h4{margin:14px 0 4px}
+.helpdoc ol,.helpdoc ul{margin:4px 0;padding-left:20px}
+
+/* ================= stage (game screen) ================= */
+.stage{min-height:100vh;background:var(--stage-bg);color:#fff;display:flex;flex-direction:column;overflow:hidden}
+.stage-top{display:flex;align-items:center;gap:18px;padding:14px 26px 6px}
+.stage-top img{height:clamp(58px,8vw,96px);filter:drop-shadow(0 8px 22px rgba(0,0,0,.45))}
+.stage-title{font-family:Inter;font-weight:900;font-size:clamp(22px,3vw,38px);letter-spacing:.01em;text-shadow:0 3px 14px rgba(0,0,0,.4)}
+.stage-progress{font-size:clamp(13px,1.4vw,17px);color:var(--blue-200);font-weight:600}
+.stage-tools{margin-left:auto;display:flex;gap:8px}
+.tool-btn{background:rgba(255,255,255,.1);border:1.5px solid rgba(129,193,255,.3);color:#fff;border-radius:999px;padding:8px 16px;font-size:13px;font-weight:700}
+.tool-btn:hover{background:rgba(255,255,255,.2)}
+.stage-main{flex:1;display:grid;grid-template-columns:minmax(200px,300px) 1fr minmax(200px,300px);gap:18px;padding:12px 26px 18px;align-items:stretch;min-height:0}
+@media(max-width:980px){.stage-main{grid-template-columns:1fr;overflow:auto}}
+.team-panel{border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:10px;background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.03));border:2px solid rgba(255,255,255,.14);position:relative;transition:box-shadow .3s,border-color .3s}
+.team-panel.turn{border-color:var(--gold-400);box-shadow:0 0 0 3px rgba(203,163,68,.35),0 0 48px rgba(203,163,68,.35)}
+.turn-flag{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold-500);color:#fff;font-family:Inter;font-weight:800;font-size:11.5px;letter-spacing:.1em;border-radius:999px;padding:4px 14px;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.team-name{font-family:Inter;font-weight:800;font-size:clamp(18px,1.9vw,26px);display:flex;align-items:center;gap:10px;line-height:1.15}
+.team-dot{width:16px;height:16px;border-radius:50%;flex:none;box-shadow:0 0 12px currentColor}
+.team-logo{width:34px;height:34px;border-radius:8px;object-fit:cover;flex:none}
+.team-score{font-family:Inter;font-weight:900;font-size:clamp(44px,5.5vw,76px);color:var(--camel-300);line-height:1;text-shadow:0 4px 18px rgba(248,192,39,.35);font-variant-numeric:tabular-nums;transition:transform .2s}
+.team-score.bump{animation:bump .5s}
+@keyframes bump{30%{transform:scale(1.22)}}
+.round-pts{font-size:13px;color:var(--blue-200);font-weight:600}
+.players{display:flex;flex-direction:column;gap:5px;margin-top:2px}
+.player{font-size:clamp(13px,1.3vw,16px);color:var(--blue-100);padding:5px 12px;border-radius:8px;display:flex;gap:8px;align-items:center}
+.player.now{background:rgba(203,163,68,.22);color:#fff;font-weight:700;outline:1.5px solid rgba(203,163,68,.6)}
+.player .pnum{font-size:11px;color:var(--blue-300);font-family:Inter;font-weight:700;width:14px}
+.stage-center{display:flex;flex-direction:column;gap:14px;min-width:0;min-height:0}
+.qbanner{background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04));border:2px solid rgba(129,193,255,.3);border-radius:18px;padding:16px 26px;text-align:center}
+.qbanner .qtag{font-size:clamp(12px,1.2vw,15px);color:var(--gold-300);font-weight:800;font-family:Inter;letter-spacing:.12em;margin-bottom:6px}
+.qbanner .qtext{font-family:Inter;font-weight:800;font-size:clamp(20px,2.6vw,36px);line-height:1.25;text-wrap:pretty}
+.board{display:grid;gap:12px;flex:1;align-content:start}
+.slot{perspective:1200px;height:clamp(58px,9vh,86px)}
+.slot-inner{position:relative;width:100%;height:100%;transform-style:preserve-3d;transition:transform .55s cubic-bezier(.2,.7,.3,1.1)}
+.slot.open .slot-inner{transform:rotateX(180deg)}
+.slot-face{position:absolute;inset:0;backface-visibility:hidden;border-radius:14px;display:flex;align-items:center;padding:0 22px}
+.slot-front{background:linear-gradient(180deg,var(--navy-3),var(--blue-950));border:2px solid rgba(129,193,255,.4);justify-content:center}
+.slot-front .n{font-family:Inter;font-weight:900;font-size:clamp(22px,3vh,34px);color:var(--blue-300);text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.slot-back{background:linear-gradient(180deg,#1d4ed8,var(--blue-900));border:2px solid var(--gold-400);transform:rotateX(180deg);justify-content:space-between;gap:14px;box-shadow:0 0 26px rgba(79,152,255,.35)}
+.slot-back .atxt{font-family:Inter;font-weight:800;font-size:clamp(17px,2.6vh,27px);text-transform:uppercase;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot-back .apts{font-family:Inter;font-weight:900;font-size:clamp(19px,3vh,30px);color:var(--camel-300);background:rgba(0,0,0,.28);border-radius:10px;padding:3px 14px;flex:none}
+.slot-back .who{font-size:11px;color:var(--blue-200);font-weight:700;flex:none}
+.qr-stage{display:flex;gap:26px;align-items:center;justify-content:center;flex-wrap:wrap;flex:1}
+.qr-white{background:#fff;padding:16px;border-radius:18px;box-shadow:0 0 60px rgba(79,152,255,.4);animation:qrIn .6s cubic-bezier(.2,.8,.3,1.2)}
+@keyframes qrIn{from{transform:scale(.6);opacity:0}}
+.qr-side{text-align:left;max-width:380px}
+.qr-side h3{font-size:clamp(18px,2.2vw,28px);font-weight:800;margin-bottom:8px}
+.qr-side .joincode{font-family:Inter;font-weight:900;font-size:clamp(26px,3.4vw,44px);letter-spacing:.24em;color:var(--gold-300);background:rgba(0,0,0,.3);border-radius:12px;padding:6px 18px;display:inline-block;margin:8px 0}
+.qr-side .cnt-line{font-size:clamp(14px,1.6vw,19px);color:var(--blue-100)}
+.qr-side .cnt-line b{font-family:Inter;font-size:clamp(24px,3vw,40px);color:#fff}
+.stage-status{display:flex;gap:12px;align-items:center;justify-content:center;padding:10px 26px 16px;flex-wrap:wrap}
+.status-chip{background:rgba(255,255,255,.08);border:1.5px solid rgba(129,193,255,.3);border-radius:999px;padding:8px 20px;font-size:clamp(12px,1.3vw,15px);font-weight:700;display:flex;gap:8px;align-items:center}
+.status-chip.hot{border-color:var(--gold-400);background:rgba(203,163,68,.18);animation:pulse 1.4s infinite}
+@keyframes pulse{50%{box-shadow:0 0 22px rgba(203,163,68,.5)}}
+.status-dot{width:9px;height:9px;border-radius:50%;background:var(--green-500)}
+.status-dot.off{background:var(--ink-400)}
+.status-dot.hot{background:var(--camel-400);box-shadow:0 0 10px var(--camel-400)}
+.idle-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center}
+.idle-hero img{width:min(380px,55vw);filter:drop-shadow(0 20px 50px rgba(0,0,0,.5))}
+.idle-hero p{color:var(--blue-200);font-size:clamp(14px,1.6vw,19px);margin:0}
+.buzz-banner{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,10,30,.82);z-index:60;animation:fadeIn .18s}
+.buzz-banner .inner{text-align:center;animation:popIn .35s cubic-bezier(.2,.9,.3,1.3)}
+.buzz-banner .who{font-family:Inter;font-weight:900;font-size:clamp(40px,8vw,110px);text-shadow:0 6px 40px rgba(0,0,0,.6)}
+.buzz-banner .lbl{font-family:Inter;font-weight:800;letter-spacing:.3em;color:var(--gold-300);font-size:clamp(14px,2vw,22px)}
+@keyframes popIn{from{transform:scale(.5);opacity:0}}
+@keyframes fadeIn{from{opacity:0}}
+.wrongX{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:70;pointer-events:none}
+.wrongX span{font-family:Inter;font-weight:900;font-size:clamp(160px,40vh,420px);color:var(--red-500);text-shadow:0 0 80px rgba(234,79,73,.7);animation:xIn .8s forwards}
+@keyframes xIn{0%{transform:scale(.3);opacity:0}18%{transform:scale(1.15);opacity:1}75%{transform:scale(1);opacity:1}100%{opacity:0}}
+.overlay-screen{position:fixed;inset:0;background:var(--stage-bg);z-index:55;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:30px;text-align:center;animation:fadeIn .4s}
+.overlay-screen h2{font-family:Inter;font-weight:900;font-size:clamp(30px,5vw,64px);color:#fff}
+.overlay-screen .sub{color:var(--gold-300);font-family:Inter;font-weight:800;letter-spacing:.2em;font-size:clamp(13px,1.6vw,18px)}
+.rank-row{display:flex;align-items:center;gap:18px;background:rgba(255,255,255,.07);border:2px solid rgba(129,193,255,.25);border-radius:16px;padding:16px 28px;width:min(640px,92vw);animation:slideUp .5s both}
+.rank-row.win{border-color:var(--gold-400);box-shadow:0 0 40px rgba(203,163,68,.35)}
+.rank-row:nth-child(odd){animation-delay:.1s}
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}}
+.rank-pos{font-family:Inter;font-weight:900;font-size:30px;color:var(--gold-300);width:44px}
+.rank-name{font-family:Inter;font-weight:800;font-size:clamp(20px,2.6vw,32px);color:#fff;flex:1;text-align:left;display:flex;align-items:center;gap:10px}
+.rank-score{font-family:Inter;font-weight:900;font-size:clamp(26px,3.4vw,44px);color:var(--camel-300);font-variant-numeric:tabular-nums}
+.crown{font-family:Inter;font-weight:800;font-size:12px;background:var(--gold-500);color:#fff;border-radius:999px;padding:3px 10px;letter-spacing:.1em}
+.winners-list{color:var(--blue-100);font-size:clamp(14px,1.8vw,19px);line-height:1.7}
+.mainbuzz-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.mainbuzz{border-radius:16px;padding:14px 30px;font-family:Inter;font-weight:900;font-size:clamp(15px,1.8vw,20px);color:#fff;border:2.5px solid rgba(255,255,255,.35);text-shadow:0 2px 6px rgba(0,0,0,.4);min-width:170px}
+.mainbuzz:hover{filter:brightness(1.15)}
+.mainbuzz[disabled]{opacity:.4}
+.kbd-hint{font-size:11.5px;color:var(--blue-300);letter-spacing:.03em}
+
+/* ================= survey ================= */
+.survey{min-height:100vh;background:var(--stage-bg);display:flex;flex-direction:column;align-items:center;padding:26px 18px;color:#fff}
+.survey img.logo{width:min(230px,58vw);filter:drop-shadow(0 10px 30px rgba(0,0,0,.5));margin-bottom:6px}
+.survey-card{background:#fff;color:var(--ink-800);border-radius:18px;padding:24px;width:min(480px,100%);box-shadow:0 12px 28px rgba(0,0,0,.4);margin-top:14px}
+.survey-card .stitle{font-family:Inter;font-weight:800;font-size:13px;letter-spacing:.14em;color:var(--gold-600);margin-bottom:8px}
+.survey-card .qbig{font-family:Inter;font-weight:800;font-size:21px;line-height:1.3;margin-bottom:16px;text-wrap:pretty}
+.survey-card input{font-size:18px;padding:14px;border-radius:10px}
+.survey-status{margin-top:16px;text-align:center;font-size:14px;color:var(--blue-200)}
+.big-check{width:74px;height:74px;border-radius:50%;background:var(--green-100);color:var(--green-600);display:flex;align-items:center;justify-content:center;font-size:40px;margin:6px auto 12px;animation:popIn .4s}
+.waiting-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gold-400);margin:0 2px;animation:blink 1.2s infinite}
+.waiting-dot:nth-child(2){animation-delay:.2s}.waiting-dot:nth-child(3){animation-delay:.4s}
+@keyframes blink{50%{opacity:.2}}
+
+.back-btn{position:fixed;top:14px;left:14px;background:rgba(255,255,255,.1);border:1.5px solid rgba(129,193,255,.3);color:#fff;border-radius:999px;padding:8px 16px;font-family:Inter;font-size:13px;font-weight:700;z-index:50}
+.back-btn:hover{background:rgba(255,255,255,.2);color:#fff;text-decoration:none}
+
+/* ================= guide ================= */
+.guide{min-height:100vh;background:var(--stage-bg);padding:70px 20px 60px;display:flex;flex-direction:column;align-items:center}
+.guide .glogo{width:min(260px,60vw);filter:drop-shadow(0 14px 34px rgba(0,0,0,.5))}
+.guide-intro{color:var(--blue-200);font-size:16px;line-height:1.6;max-width:620px;text-align:center;margin:14px 0 8px}
+.guide-h{font-family:Inter;font-weight:800;font-size:22px;color:var(--gold-300);margin:28px 0 4px;width:min(680px,100%)}
+.guide-card{display:flex;gap:16px;background:rgba(255,255,255,.06);border:1.5px solid rgba(129,193,255,.25);border-radius:14px;padding:16px 20px;margin-top:12px;width:min(680px,100%);color:var(--blue-100);font-size:14.5px;line-height:1.6}
+.guide-card h3{font-size:16px;font-weight:800;color:#fff;margin-bottom:3px}
+.guide-step{font-family:Inter;font-weight:900;font-size:18px;color:var(--gold-300);background:rgba(203,163,68,.15);border:1.5px solid rgba(203,163,68,.45);border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex:none}
+
+/* ================= buzzer ================= */
+.buzzpage{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--stage-bg);color:#fff;padding:18px;gap:12px}
+.buzzpage .head{text-align:center}
+.buzzpage .head img{width:min(170px,44vw);filter:drop-shadow(0 8px 22px rgba(0,0,0,.5))}
+.buzzpage .tname{font-family:Inter;font-weight:900;font-size:clamp(24px,7vw,40px);text-shadow:0 3px 12px rgba(0,0,0,.5)}
+.thebuzzer{flex:1;border-radius:32px;font-family:Inter;font-weight:900;font-size:clamp(34px,10vw,64px);color:#fff;text-shadow:0 4px 14px rgba(0,0,0,.45);border:6px solid rgba(255,255,255,.4);box-shadow:0 18px 50px rgba(0,0,0,.5),inset 0 -12px 30px rgba(0,0,0,.3),inset 0 10px 24px rgba(255,255,255,.25);transition:transform .08s,filter .2s;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:manipulation}
+.thebuzzer:active{transform:scale(.965)}
+.thebuzzer.locked{filter:grayscale(.75) brightness(.55)}
+.thebuzzer.won{animation:wonPulse .8s infinite}
+@keyframes wonPulse{50%{box-shadow:0 0 70px rgba(248,192,39,.8),inset 0 -12px 30px rgba(0,0,0,.3)}}
+.buzz-state{text-align:center;font-size:16px;font-weight:700;color:var(--blue-200);min-height:24px}
+
+/* ================= misc ================= */
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:90}
+#fxlayer{position:fixed;inset:0;pointer-events:none;z-index:80}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink-900);color:#fff;border-radius:999px;padding:10px 22px;font-size:13.5px;font-weight:600;z-index:95;box-shadow:0 8px 24px rgba(0,0,0,.35);animation:fadeIn .2s}
+.timer-chip{font-variant-numeric:tabular-nums}
+@media print{
+  body *{visibility:hidden} .print-area,.print-area *{visibility:visible}
+  .print-area{position:absolute;left:0;top:0;width:100%;color:#000}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="fxlayer"></div>
+<canvas id="confetti"></canvas>
+<div id="toast-slot"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+'use strict';
+/* ==========================================================================
+   CONFIG — edit these values
+   ========================================================================== */
+const ADMIN_PASSWORD = '1234';           // admin portal password — change me
+const FIREBASE_CONFIG = {
+  // Paste your Firebase web-app config here to enable live multi-device sync.
+  // Leave apiKey empty to run in LOCAL DEMO MODE (same-browser tabs only).
+  apiKey: '',
+  authDomain: '',
+  databaseURL: '',
+  projectId: '',
+  storageBucket: '',
+  messagingSenderId: '',
+  appId: ''
+};
+const APP_ROOT = 'cssfeud';              // Firebase root node
+
+/* ========================= utils ========================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+const param = k => new URLSearchParams(location.search).get(k);
+const clone = o => JSON.parse(JSON.stringify(o));
+const fmtT = t => new Date(t).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+function setPath(obj, path, val){
+  const p = path.split('.'); let o = obj;
+  for (let i = 0; i < p.length - 1; i++) o = o[p[i]];
+  o[p[p.length - 1]] = val;
+}
+function normTxt(s){ return String(s||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,'').replace(/\s+/g,' ').trim(); }
+function lev(a, b){
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m || !n) return m + n;
+  let prev = Array.from({length: n + 1}, (_, i) => i);
+  for (let i = 1; i <= m; i++){
+    const cur = [i];
+    for (let j = 1; j <= n; j++)
+      cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function similar(a, b){
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const d = lev(a, b);
+  return (d <= 1 && a.length > 3) || (d <= 2 && a.length > 6);
+}
+function toast(msg){
+  const slot = $('#toast-slot');
+  slot.innerHTML = '<div class="toast">' + esc(msg) + '</div>';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => slot.innerHTML = '', 2600);
+}
+function download(name, text, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], {type: type || 'text/plain'}));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+/* ========================= sound ========================= */
+let MUTED = localStorage.getItem('cf:muted') === '1';
+let AC = null;
+function ac(){
+  AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f, when, dur, type, vol, slide){
+  if (MUTED) return;
+  try {
+    const c = ac(), o = c.createOscillator(), g = c.createGain(), t = c.currentTime + when;
+    o.type = type || 'sine'; o.frequency.setValueAtTime(f, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || .18, t + .015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + .05);
+  } catch(e){}
+}
+const SND = {
+  buzzer(){ tone(170, 0, .55, 'sawtooth', .22); tone(120, 0, .55, 'square', .12); },
+  correct(){ tone(660, 0, .14, 'triangle', .2); tone(880, .13, .22, 'triangle', .2); },
+  points(){ tone(523, 0, .1, 'triangle', .16); tone(659, .09, .1, 'triangle', .16); tone(784, .18, .18, 'triangle', .18); },
+  wrong(){ tone(160, 0, .32, 'sawtooth', .2); tone(110, .3, .5, 'sawtooth', .22); },
+  reveal(){ tone(320, 0, .3, 'sine', .16, 640); tone(640, .22, .18, 'triangle', .14); },
+  round(){ [523, 659, 784, 1046].forEach((f, i) => tone(f, i * .12, .2, 'triangle', .17)); },
+  win(){ [523, 659, 784, 1046, 784, 1046, 1318].forEach((f, i) => tone(f, i * .15, .25, 'triangle', .18)); tone(262, 0, 1.4, 'sine', .1); }
+};
+
+/* ========================= confetti ========================= */
+function confetti(dur){
+  const cv = $('#confetti'), ctx = cv.getContext('2d');
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ['#CBA344', '#F8C027', '#4F98FF', '#81C1FF', '#EA4F49', '#4A9D5C', '#ffffff'];
+  const ps = Array.from({length: 180}, () => ({
+    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .5,
+    w: 6 + Math.random() * 7, h: 8 + Math.random() * 10,
+    vy: 2 + Math.random() * 3.5, vx: -1.5 + Math.random() * 3,
+    r: Math.random() * Math.PI, vr: -.1 + Math.random() * .2,
+    c: cols[Math.floor(Math.random() * cols.length)]
+  }));
+  const end = Date.now() + (dur || 4000);
+  (function frame(){
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    if (Date.now() > end){ return; }
+    ps.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      if (p.y > cv.height + 20){ p.y = -20; p.x = Math.random() * cv.width; }
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h); ctx.restore();
+    });
+    requestAnimationFrame(frame);
+  })();
+}
+
+/* ========================= backends ========================= */
+const HAS_FB = !!FIREBASE_CONFIG.apiKey;
+function makeLocalBackend(){
+  const bc = 'BroadcastChannel' in window ? new BroadcastChannel('cssfeud') : null;
+  const subs = [];
+  const K = {
+    state: g => 'cf:' + g + ':state',
+    resp: (g, q) => 'cf:' + g + ':resp:' + q,
+    buzz: g => 'cf:' + g + ':buzz'
+  };
+  const get = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch(e){ return d; } };
+  const put = (k, v) => { localStorage.setItem(k, JSON.stringify(v)); if (bc) bc.postMessage(k); route(k, true); };
+  function route(k, self){
+    subs.forEach(s => { if (s.k === k && (!self || s.echo)) s.cb(get(k, null)); });
+  }
+  addEventListener('storage', e => { if (e.key && e.key.startsWith('cf:')) route(e.key); });
+  if (bc) bc.onmessage = e => route(e.data);
+  return {
+    kind: 'local', now: () => Date.now(),
+    async init(){},
+    async getActive(){ return get('cf:active', null); },
+    setActive(g){ localStorage.setItem('cf:active', g); },
+    async loadState(g){ return get(K.state(g), null); },
+    saveState(s){ put(K.state(s.id), s); },
+    onState(g, cb){ subs.push({k: K.state(g), cb, echo: false}); },
+    async loadResp(g, q){ return get(K.resp(g, q), {}); },
+    submitResp(g, q, dev, text){ const m = get(K.resp(g, q), {}); m[dev] = {text, ts: Date.now()}; put(K.resp(g, q), m); },
+    clearResp(g, q){ put(K.resp(g, q), {}); },
+    onResp(g, q, cb){ const s = {k: K.resp(g, q), cb, echo: true}; subs.push(s); cb(get(s.k, {})); return () => subs.splice(subs.indexOf(s), 1); },
+    pressBuzz(g, team){ const l = get(K.buzz(g), []); l.push({team, t: Date.now(), id: uid()}); put(K.buzz(g), l.slice(-60)); },
+    clearBuzz(g){ put(K.buzz(g), []); },
+    onBuzz(g, cb){ const s = {k: K.buzz(g), cb, echo: true}; subs.push(s); cb(get(s.k, [])); },
+    async getIndex(){ return get('cf:index', {}); },
+    setIndex(g, meta){ const i = get('cf:index', {}); i[g] = meta; localStorage.setItem('cf:index', JSON.stringify(i)); },
+    removeGame(g){ localStorage.removeItem(K.state(g)); localStorage.removeItem(K.buzz(g));
+      for (let i = 0; i < 60; i++) localStorage.removeItem(K.resp(g, i));
+      const idx = get('cf:index', {}); delete idx[g]; localStorage.setItem('cf:index', JSON.stringify(idx)); }
+  };
+}
+function makeFirebaseBackend(){
+  let db = null, offset = 0;
+  const P = g => APP_ROOT + '/games/' + g;
+  function loadScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
+  return {
+    kind: 'firebase', now: () => Date.now() + offset,
+    async init(){
+      const v = '10.12.2';
+      await loadScript('https://www.gstatic.com/firebasejs/' + v + '/firebase-app-compat.js');
+      await loadScript('https://www.gstatic.com/firebasejs/' + v + '/firebase-auth-compat.js');
+      await loadScript('https://www.gstatic.com/firebasejs/' + v + '/firebase-database-compat.js');
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.database();
+      try { await firebase.auth().signInAnonymously(); } catch(e){ console.warn('Anonymous auth unavailable:', e.message); }
+      db.ref('.info/serverTimeOffset').on('value', s => offset = s.val() || 0);
+    },
+    async getActive(){ return (await db.ref(APP_ROOT + '/active').once('value')).val(); },
+    setActive(g){ db.ref(APP_ROOT + '/active').set(g); },
+    async loadState(g){ return (await db.ref(P(g) + '/state').once('value')).val(); },
+    saveState(s){ db.ref(P(s.id) + '/state').set(JSON.parse(JSON.stringify(s))); },
+    onState(g, cb){ let first = true; db.ref(P(g) + '/state').on('value', s => { if (first){ first = false; return; } cb(s.val()); }); },
+    async loadResp(g, q){ return (await db.ref(P(g) + '/resp/' + q).once('value')).val() || {}; },
+    submitResp(g, q, dev, text){ db.ref(P(g) + '/resp/' + q + '/' + dev).set({text, ts: firebase.database.ServerValue.TIMESTAMP}); },
+    clearResp(g, q){ db.ref(P(g) + '/resp/' + q).remove(); },
+    onResp(g, q, cb){ const r = db.ref(P(g) + '/resp/' + q), f = s => cb(s.val() || {}); r.on('value', f); return () => r.off('value', f); },
+    pressBuzz(g, team){ db.ref(P(g) + '/buzz').push({team, t: firebase.database.ServerValue.TIMESTAMP, id: uid()}); },
+    clearBuzz(g){ db.ref(P(g) + '/buzz').remove(); },
+    onBuzz(g, cb){ db.ref(P(g) + '/buzz').on('value', s => { const v = s.val() || {}; cb(Object.values(v)); }); },
+    async getIndex(){ return (await db.ref(APP_ROOT + '/index').once('value')).val() || {}; },
+    setIndex(g, meta){ db.ref(APP_ROOT + '/index/' + g).set(meta); },
+    removeGame(g){ db.ref(P(g)).remove(); db.ref(APP_ROOT + '/index/' + g).remove(); }
+  };
+}
+const Backend = HAS_FB ? makeFirebaseBackend() : makeLocalBackend();
+
+/* ========================= state ========================= */
+function defaultState(id, title){
+  return {
+    id, rev: 0, writer: '', title: title || 'CSS Feud', createdAt: Date.now(), demo: false,
+    joinCode: id.slice(-4).toUpperCase(),
+    teams: [
+      {name: 'Team 1', color: '#CBA344', logo: '', players: ['', '', '', '', ''], score: 0, playerIdx: 0},
+      {name: 'Team 2', color: '#4F98FF', logo: '', players: ['', '', '', '', ''], score: 0, playerIdx: 0}
+    ],
+    questions: [], qIdx: 0,
+    phase: 'idle',            // idle | survey | review | board | roundEnd | final
+    surveyOpen: false, surveyEndsAt: 0, surveySession: 0,
+    review: [], board: [], roundPoints: [0, 0], turn: null,
+    buzz: {open: false, openedAt: 0},
+    paused: false, history: [], log: [], fx: {n: 0, type: ''}
+  };
+}
+function blankQ(text){
+  return {id: uid(), text: text || '', category: '', image: '', timeLimit: 0, maxAnswers: 6, preRaw: '', notes: ''};
+}
+function demoState(){
+  const s = defaultState('demo', 'CSS Feud — demo game');
+  s.demo = true;
+  s.teams[0] = {name: 'Desert Falcons', color: '#CBA344', logo: '', players: ['Fouzia', 'Ali', 'Mariam', 'Omar', 'Huda'], score: 0, playerIdx: 0};
+  s.teams[1] = {name: 'Blue Oryx', color: '#4F98FF', logo: '', players: ['Khalid', 'Sara', 'Yousef', 'Noora', 'Hassan'], score: 0, playerIdx: 0};
+  const q1 = blankQ('What is the first thing employees do when they arrive at the office?');
+  q1.category = 'Office life'; q1.maxAnswers = 6;
+  const q2 = blankQ('Name something employees always forget before a meeting.');
+  q2.category = 'Meetings'; q2.maxAnswers = 6;
+  q2.preRaw = 'Laptop charger | 12\nNotebook and pen | 9\nJoining the call on time | 7\nAgenda | 5\nCoffee | 3';
+  const q3 = blankQ('What is the most popular lunch order in the office?');
+  q3.category = 'Food'; q3.maxAnswers = 5; q3.timeLimit = 90;
+  s.questions = [q1, q2, q3];
+  return s;
+}
+const DEMO_POOLS = [
+  ['Coffee', 'coffee', 'Make coffee', 'Get coffe', 'Check email', 'check emails', 'Emails', 'Say good morning', 'good morning to everyone', 'Open laptop', 'open the laptop', 'Chat with colleagues', 'Karak', 'karak tea', 'Breakfast', 'Check WhatsApp', 'Coffee', 'check email', 'Coffee', 'Prayer', 'Open Teams', 'coffee first', 'Say hi', 'Check calendar'],
+  ['Charger', 'laptop charger', 'Pen', 'a pen', 'Notebook', 'The agenda', 'agenda', 'Coffee', 'Their laptop', 'Meeting room booking', 'To join on time', 'Water', 'charger', 'Pen and paper', 'The meeting link'],
+  ['Biryani', 'biryani', 'Shawarma', 'shawerma', 'Burger', 'burgers', 'Sushi', 'Salad', 'salads', 'Pasta', 'Manakish', 'Grilled chicken', 'biryani', 'Shawarma', 'Kebab', 'Poke bowl']
+];
+
+/* ========================= app globals ========================= */
+const MODE = param('mode') || 'home';
+let GID = '', S = null, RESP = {}, BUZZ = [], INDEX = {};
+let DEVICE = localStorage.getItem('cf:dev');
+if (!DEVICE){ DEVICE = 'd' + uid(); localStorage.setItem('cf:dev', DEVICE); }
+let ADMIN_OK = sessionStorage.getItem('cf:admin') === '1';
+let ADMIN_TAB = 'live';
+let UNDO = [], REDO = [];
+let lastFxN = 0, lastWinner = null, BANNER_UNTIL = 0, RESPUNSUB = null, SUBQ = -1, AUTOCLOSED = 0;
+let EDIT_Q = null; // expanded question editor
+
+const curQ = () => (S && S.questions[S.qIdx]) || null;
+const tname = i => S.teams[i] ? (S.teams[i].name || ('Team ' + (i + 1))) : '';
+const baseURL = () => location.origin + location.pathname;
+const surveyURL = () => baseURL() + '?mode=survey&game=' + GID;
+const buzzerURL = t => baseURL() + '?mode=buzzer&team=' + t + '&game=' + GID;
+const answeredKey = () => 'cf:answered:' + GID + ':' + (S ? S.qIdx : 0) + ':' + (S ? S.surveySession : 0);
+
+/* ========================= persistence / undo / fx ========================= */
+function addLog(msg){
+  S.log.unshift({t: Date.now(), msg});
+  if (S.log.length > 250) S.log.length = 250;
+}
+function pushUndo(){ UNDO.push(clone(S)); if (UNDO.length > 40) UNDO.shift(); REDO = []; }
+function persist(){
+  S.rev = (S.rev || 0) + 1; S.writer = DEVICE; S.updated = Date.now();
+  Backend.saveState(S);
+  Backend.setIndex(GID, {title: S.title, t: Date.now(), demo: !!S.demo});
+  render();
+}
+function mutate(fn, logMsg){
+  pushUndo();
+  fn();
+  if (logMsg) addLog(logMsg);
+  persist();
+}
+function fire(type, team){
+  S.fx = {n: (S.fx ? S.fx.n : 0) + 1, type, team: team ?? null};
+  lastFxN = S.fx.n;
+  runFx(S.fx);
+}
+function runFx(fx){
+  if (fx.type === 'wrong'){
+    SND.wrong();
+    if (MODE === 'game' || MODE === 'buzzer'){ $('#fxlayer').innerHTML = '<div class="wrongX"><span>✕</span></div>'; setTimeout(() => $('#fxlayer').innerHTML = '', 950); }
+  }
+  else if (fx.type === 'correct') SND.correct();
+  else if (fx.type === 'points') SND.points();
+  else if (fx.type === 'reveal') SND.reveal();
+  else if (fx.type === 'board') SND.points();
+  else if (fx.type === 'round') SND.round();
+  else if (fx.type === 'win'){ SND.win(); if (MODE !== 'survey') confetti(5000); }
+}
+function handleRemote(st){
+  if (!st) return;
+  if (st.writer === DEVICE && st.rev <= (S ? S.rev : 0)) return;
+  S = st;
+  if (S.fx && S.fx.n !== lastFxN){ lastFxN = S.fx.n; runFx(S.fx); }
+  subResp(); render();
+}
+function subResp(){
+  if (!S) return;
+  if (SUBQ === S.qIdx) return;
+  SUBQ = S.qIdx;
+  if (RESPUNSUB) RESPUNSUB();
+  RESPUNSUB = Backend.onResp(GID, S.qIdx, m => { RESP = m || {}; render(); });
+}
+function validPresses(){
+  if (!S || !S.buzz) return [];
+  return (BUZZ || []).filter(p => p.t >= (S.buzz.openedAt || 0)).sort((a, b) => a.t - b.t);
+}
+function derivedWinner(){
+  if (!S || !S.buzz || !S.buzz.open) return null;
+  const ps = validPresses();
+  return ps.length ? ps[0].team : null;
+}
+function handleBuzz(){
+  const w = derivedWinner();
+  if (w !== lastWinner){
+    lastWinner = w;
+    if (w !== null){
+      SND.buzzer();
+      BANNER_UNTIL = Date.now() + 2400;
+      setTimeout(render, 2500);
+      if (MODE === 'admin' && ADMIN_OK && S.phase === 'board' && S.turn === null){
+        mutate(() => { S.turn = w; }, 'Buzz — ' + tname(w) + ' buzzed first, takes the turn');
+        return;
+      }
+    }
+  }
+  render();
+}
+
+/* ========================= review grouping ========================= */
+function parsePre(q){
+  return String(q.preRaw || '').split('\n').map(l => {
+    const m = l.split('|');
+    const text = (m[0] || '').trim();
+    const pts = parseInt((m[1] || '').trim(), 10);
+    return text ? {text, pts: isNaN(pts) ? 0 : pts} : null;
+  }).filter(Boolean);
+}
+function buildGroups(){
+  const q = curQ();
+  const groups = [];
+  parsePre(q).forEach(p => groups.push({id: uid(), name: p.text, count: 0, points: p.pts, include: true, members: [], pre: true}));
+  Object.values(RESP || {}).sort((a, b) => (a.ts || 0) - (b.ts || 0)).forEach(r => {
+    const raw = String(r.text || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const n = normTxt(raw);
+    if (!n) return;
+    let g = groups.find(g => normTxt(g.name) === n || g.members.some(m => normTxt(m) === n));
+    if (!g) g = groups.find(g => similar(normTxt(g.name), n));
+    if (g){ g.count++; g.members.push(raw); }
+    else groups.push({id: uid(), name: raw[0].toUpperCase() + raw.slice(1), count: 1, points: 0, include: true, members: [raw], pre: false});
+  });
+  groups.forEach(g => { if (!g.pre || g.count > 0) g.points = Math.max(g.count, g.pre ? g.points : g.count); });
+  groups.sort((a, b) => (b.points || b.count) - (a.points || a.count));
+  return groups;
+}
+function mergeSuggestions(){
+  const out = [];
+  const r = S.review || [];
+  for (let i = 0; i < r.length; i++)
+    for (let j = i + 1; j < r.length; j++)
+      if (similar(normTxt(r[i].name), normTxt(r[j].name))) out.push([r[i], r[j]]);
+  return out.slice(0, 5);
+}
+
+/* ========================= actions ========================= */
+const ACT = {
+  /* --- auth / nav --- */
+  login(){
+    const v = ($('#admin-pass') || {}).value || '';
+    if (v === ADMIN_PASSWORD){ ADMIN_OK = true; sessionStorage.setItem('cf:admin', '1'); render(); }
+    else toast('Incorrect password. Please try again.');
+  },
+  logout(){ ADMIN_OK = false; sessionStorage.removeItem('cf:admin'); render(); },
+  tab(d){ ADMIN_TAB = d.tab; render(); },
+  fullscreen(){
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen().catch(() => toast('Full screen is not available here'));
+  },
+  mute(){ MUTED = !MUTED; localStorage.setItem('cf:muted', MUTED ? '1' : '0'); toast(MUTED ? 'Sound off' : 'Sound on'); render(); },
+  copy(d){ navigator.clipboard.writeText(d.text).then(() => toast('Link copied')); },
+
+  /* --- game management --- */
+  async newGame(){
+    const title = prompt('Title for the new game:', 'CSS Feud'); if (title === null) return;
+    const g = 'g' + Date.now().toString(36);
+    const st = defaultState(g, title.trim() || 'CSS Feud');
+    st.questions = [blankQ('')];
+    GID = g; S = st; UNDO = []; REDO = []; SUBQ = -1;
+    Backend.setActive(g);
+    addLog('New game created');
+    persist(); wireGame(); toast('New game created — game ID ' + g);
+  },
+  async loadGame(d){
+    GID = d.g;
+    S = await Backend.loadState(GID);
+    if (!S){ toast('Could not load that game'); return; }
+    Backend.setActive(GID);
+    UNDO = []; REDO = []; SUBQ = -1; lastFxN = S.fx ? S.fx.n : 0;
+    wireGame(); render(); toast('Loaded: ' + S.title);
+  },
+  saveNow(){ persist(); toast('Game saved'); },
+  exportJson(){ download('css-feud-' + GID + '.json', JSON.stringify(S, null, 2), 'application/json'); },
+  resetQuestion(){
+    if (!confirm('Reset the current question? Board, review groups, and round points will be cleared.')) return;
+    mutate(() => {
+      S.board = []; S.review = []; S.roundPoints = [0, 0]; S.turn = null;
+      S.phase = 'idle'; S.surveyOpen = false; S.buzz = {open: false, openedAt: 0};
+    }, 'Question ' + (S.qIdx + 1) + ' reset');
+  },
+  resetScores(){
+    if (!confirm('Reset both team scores to zero?')) return;
+    mutate(() => { S.teams.forEach(t => t.score = 0); S.roundPoints = [0, 0]; S.history = []; }, 'Scores reset');
+  },
+  resetResponses(){
+    if (!confirm('Delete all survey responses for the current question?')) return;
+    Backend.clearResp(GID, S.qIdx);
+    mutate(() => { S.surveySession = (S.surveySession || 0) + 1; }, 'Survey responses cleared for question ' + (S.qIdx + 1));
+  },
+  resetAll(){
+    if (!confirm('Reset the ENTIRE game? Teams and questions are kept; scores, boards, responses and the log are cleared.')) return;
+    for (let i = 0; i < S.questions.length; i++) Backend.clearResp(GID, i);
+    Backend.clearBuzz(GID);
+    mutate(() => {
+      S.teams.forEach(t => { t.score = 0; t.playerIdx = 0; });
+      S.qIdx = 0; S.phase = 'idle'; S.surveyOpen = false; S.review = []; S.board = [];
+      S.roundPoints = [0, 0]; S.turn = null; S.buzz = {open: false, openedAt: 0};
+      S.history = []; S.log = []; S.surveySession = (S.surveySession || 0) + 1;
+    }, 'Full game reset');
+  },
+  loadDemo(){
+    GID = 'demo'; S = demoState();
+    Backend.setActive('demo');
+    DEMO_POOLS[0].forEach((t, i) => Backend.submitResp('demo', 0, 'demo' + i, t));
+    UNDO = []; REDO = []; SUBQ = -1;
+    addLog('Demo game loaded (with sample responses for question 1)');
+    persist(); wireGame(); toast('Demo game loaded');
+  },
+  removeDemo(){
+    if (!confirm('Delete the demo game and all its data?')) return;
+    Backend.removeGame('demo');
+    if (GID === 'demo') ACT.newGame();
+    else render();
+    toast('Demo data removed');
+  },
+
+  /* --- questions --- */
+  qAdd(){ mutate(() => { S.questions.push(blankQ('')); EDIT_Q = S.questions.length - 1; }, 'Question added'); },
+  qDel(d){
+    const i = +d.i;
+    if (!confirm('Delete question ' + (i + 1) + '?')) return;
+    mutate(() => { S.questions.splice(i, 1); if (S.qIdx >= S.questions.length) S.qIdx = Math.max(0, S.questions.length - 1); }, 'Question deleted');
+  },
+  qDup(d){ const i = +d.i; mutate(() => { const c = clone(S.questions[i]); c.id = uid(); S.questions.splice(i + 1, 0, c); }, 'Question duplicated'); },
+  qUp(d){ const i = +d.i; if (i === 0) return; mutate(() => { const [q] = S.questions.splice(i, 1); S.questions.splice(i - 1, 0, q); }); },
+  qDown(d){ const i = +d.i; if (i >= S.questions.length - 1) return; mutate(() => { const [q] = S.questions.splice(i, 1); S.questions.splice(i + 1, 0, q); }); },
+  qEdit(d){ EDIT_Q = EDIT_Q === +d.i ? null : +d.i; render(); },
+  qMakeCurrent(d){
+    mutate(() => {
+      S.qIdx = +d.i; S.phase = 'idle'; S.surveyOpen = false; S.review = []; S.board = [];
+      S.roundPoints = [0, 0]; S.turn = null; S.buzz = {open: false, openedAt: 0};
+    }, 'Jumped to question ' + (+d.i + 1));
+  },
+
+  /* --- live flow --- */
+  startSurvey(){
+    const q = curQ();
+    if (!q || !q.text.trim()){ toast('Write the question text first (Questions tab)'); return; }
+    AUTOCLOSED = 0;
+    mutate(() => {
+      S.phase = 'survey'; S.surveyOpen = true;
+      S.surveyEndsAt = q.timeLimit ? Backend.now() + q.timeLimit * 1000 : 0;
+      S.review = []; S.board = []; S.roundPoints = [0, 0]; S.turn = null;
+      S.buzz = {open: false, openedAt: 0};
+    }, 'Survey opened for question ' + (S.qIdx + 1));
+  },
+  closeSurvey(){
+    mutate(() => {
+      S.surveyOpen = false; S.phase = 'review'; S.review = buildGroups();
+    }, 'Survey closed — ' + Object.keys(RESP).length + ' responses collected');
+  },
+  simResponses(){
+    const pool = DEMO_POOLS[S.qIdx % DEMO_POOLS.length];
+    for (let i = 0; i < 14; i++){
+      const t = pool[Math.floor(Math.random() * pool.length)];
+      Backend.submitResp(GID, S.qIdx, 'sim' + uid(), t);
+    }
+    toast('14 simulated responses added');
+  },
+  boardFromPre(){
+    const q = curQ();
+    if (!parsePre(q).length){ toast('This question has no pre-approved answers'); return; }
+    mutate(() => { S.surveyOpen = false; S.phase = 'review'; S.review = buildGroups(); }, 'Review opened from pre-approved answers');
+  },
+  approveBoard(){
+    const inc = (S.review || []).filter(g => g.include && String(g.name).trim());
+    if (!inc.length){ toast('Include at least one answer'); return; }
+    const q = curQ();
+    mutate(() => {
+      S.board = inc
+        .slice()
+        .sort((a, b) => (+b.points || 0) - (+a.points || 0))
+        .slice(0, Math.max(1, +q.maxAnswers || 8))
+        .map(g => ({id: uid(), text: String(g.name).trim(), points: Math.max(0, +g.points || 0), revealed: false, awarded: false, awardedTo: null}));
+      S.phase = 'board'; S.turn = null; S.roundPoints = [0, 0];
+      fire('board');
+    }, 'Board approved — ' + Math.min(inc.length, q.maxAnswers || 8) + ' answers published');
+  },
+
+  /* --- review --- */
+  grpMerge(){
+    const sel = [...document.querySelectorAll('.grp-sel:checked')].map(c => c.dataset.gid);
+    if (sel.length < 2){ toast('Tick two or more groups to merge'); return; }
+    mutate(() => {
+      const groups = sel.map(id => S.review.find(g => g.id === id)).filter(Boolean);
+      const base = groups[0];
+      groups.slice(1).forEach(g => {
+        base.count += g.count; base.members = base.members.concat(g.members, g.count === 0 && g.pre ? [] : []);
+        S.review.splice(S.review.indexOf(g), 1);
+      });
+      base.points = Math.max(base.count, +base.points || 0);
+    }, 'Answer groups merged');
+  },
+  grpMergePair(d){
+    mutate(() => {
+      const a = S.review.find(g => g.id === d.a), b = S.review.find(g => g.id === d.b);
+      if (!a || !b) return;
+      a.count += b.count; a.members = a.members.concat(b.members);
+      a.points = Math.max(a.count, +a.points || 0);
+      S.review.splice(S.review.indexOf(b), 1);
+    }, 'Answer groups merged');
+  },
+  grpSplit(d){
+    mutate(() => {
+      const g = S.review.find(x => x.id === d.gid); if (!g) return;
+      const uniq = {};
+      g.members.forEach(m => { const n = normTxt(m); uniq[n] = uniq[n] || {text: m, c: 0}; uniq[n].c++; });
+      const parts = Object.values(uniq);
+      if (parts.length < 2){ toast('Nothing to separate in this group'); return; }
+      const i = S.review.indexOf(g);
+      const news = parts.map(p => ({id: uid(), name: p.text[0].toUpperCase() + p.text.slice(1), count: p.c, points: p.c, include: true, members: Array(p.c).fill(p.text), pre: false}));
+      S.review.splice(i, 1, ...news);
+    }, 'Answer group separated');
+  },
+  grpDel(d){ mutate(() => { S.review = S.review.filter(g => g.id !== d.gid); }, 'Answer removed from review'); },
+  grpUp(d){ const i = S.review.findIndex(g => g.id === d.gid); if (i > 0) mutate(() => { const [g] = S.review.splice(i, 1); S.review.splice(i - 1, 0, g); }); },
+  grpDown(d){ const i = S.review.findIndex(g => g.id === d.gid); if (i < S.review.length - 1 && i > -1) mutate(() => { const [g] = S.review.splice(i, 1); S.review.splice(i + 1, 0, g); }); },
+  grpAdd(){
+    const t = ($('#grp-new') || {}).value || '', p = +(($('#grp-new-pts') || {}).value || 0);
+    if (!t.trim()){ toast('Type the answer text first'); return; }
+    mutate(() => { S.review.push({id: uid(), name: t.trim(), count: 0, points: Math.max(0, p), include: true, members: [], pre: false}); }, 'Answer added manually: ' + t.trim());
+  },
+  grpHideLow(){ mutate(() => { S.review.forEach(g => { if (g.count <= 1 && !g.pre) g.include = false; }); }, 'Low-frequency answers hidden'); },
+
+  /* --- judge --- */
+  revealAward(d){
+    const a = S.board.find(x => x.id === d.aid); if (!a) return;
+    if (S.turn === null){ toast('No team has the turn — open the buzzers or transfer the turn first'); return; }
+    if (a.awarded && !confirm('This answer was already awarded. Award it again?')) return;
+    const t = S.turn;
+    mutate(() => {
+      a.revealed = true; a.awarded = true; a.awardedTo = t;
+      S.teams[t].score += a.points; S.roundPoints[t] += a.points;
+      const p = S.teams[t].players[S.teams[t].playerIdx] || 'Player ' + (S.teams[t].playerIdx + 1);
+      S.teams[t].playerIdx = (S.teams[t].playerIdx + 1) % 5;
+      fire('correct', t);
+      addLog(tname(t) + ' · ' + p + ' — correct: "' + a.text + '" (+' + a.points + ' pts)');
+    });
+  },
+  revealOnly(d){
+    const a = S.board.find(x => x.id === d.aid); if (!a) return;
+    mutate(() => { a.revealed = true; fire('reveal'); }, 'Revealed (no points): "' + a.text + '"');
+  },
+  hideAns(d){
+    const a = S.board.find(x => x.id === d.aid); if (!a) return;
+    mutate(() => { a.revealed = false; }, 'Hidden again: "' + a.text + '"');
+  },
+  removeAns(d){
+    const a = S.board.find(x => x.id === d.aid); if (!a) return;
+    if (!confirm('Remove "' + a.text + '" from the board?')) return;
+    mutate(() => { S.board = S.board.filter(x => x.id !== d.aid); }, 'Removed from board: "' + a.text + '"');
+  },
+  addAns(){
+    const t = ($('#ans-new') || {}).value || '', p = +(($('#ans-new-pts') || {}).value || 0);
+    if (!t.trim()){ toast('Type the answer text first'); return; }
+    mutate(() => { S.board.push({id: uid(), text: t.trim(), points: Math.max(0, p), revealed: false, awarded: false, awardedTo: null}); }, 'Answer added to board: "' + t.trim() + '"');
+  },
+  wrong(){
+    mutate(() => {
+      const t = S.turn;
+      fire('wrong');
+      if (t !== null){
+        const p = S.teams[t].players[S.teams[t].playerIdx] || 'Player ' + (S.teams[t].playerIdx + 1);
+        S.teams[t].playerIdx = (S.teams[t].playerIdx + 1) % 5;
+        S.turn = t === null ? null : 1 - t;
+        addLog(tname(t) + ' · ' + p + ' — wrong answer, turn passes to ' + tname(1 - t));
+      } else addLog('Wrong answer');
+    });
+  },
+  bonus(){
+    const t = +(($('#bonus-team') || {}).value || 0);
+    const p = +(($('#bonus-pts') || {}).value || 0);
+    const why = ($('#bonus-why') || {}).value || 'judge decision';
+    if (!p){ toast('Enter a points value (negative to deduct)'); return; }
+    mutate(() => {
+      S.teams[t].score += p;
+      if (S.phase === 'board') S.roundPoints[t] += p;
+      fire(p > 0 ? 'points' : 'wrong', t);
+      addLog(tname(t) + ' — ' + (p > 0 ? '+' : '') + p + ' pts (' + why + ')');
+    });
+  },
+  transferTurn(){ mutate(() => { S.turn = S.turn === null ? 0 : 1 - S.turn; }, 'Turn transferred to ' + tname(S.turn === null ? 0 : 1 - S.turn)); },
+  setTurn(d){ mutate(() => { S.turn = +d.t; }, 'Turn given to ' + tname(+d.t)); },
+  revealAll(){ mutate(() => { S.board.forEach(a => a.revealed = true); fire('reveal'); }, 'All remaining answers revealed'); },
+  pause(){ mutate(() => { S.paused = !S.paused; }, S.paused ? 'Round resumed' : 'Round paused'); },
+  undo(){
+    if (!UNDO.length){ toast('Nothing to undo'); return; }
+    REDO.push(clone(S));
+    const prev = UNDO.pop();
+    prev.rev = S.rev; S = prev;
+    addLog('Undo');
+    persist(); toast('Undone');
+  },
+  redo(){
+    if (!REDO.length){ toast('Nothing to redo'); return; }
+    UNDO.push(clone(S));
+    const nxt = REDO.pop();
+    nxt.rev = S.rev; S = nxt;
+    addLog('Redo');
+    persist(); toast('Redone');
+  },
+  endRound(){
+    mutate(() => {
+      S.history.push({q: curQ() ? curQ().text : '', pts: [...S.roundPoints]});
+      S.board.forEach(a => a.revealed = true);
+      S.phase = 'roundEnd'; S.buzz.open = false;
+      fire('round');
+    }, 'Round ' + (S.qIdx + 1) + ' ended — ' + tname(0) + ' ' + S.roundPoints[0] + ' / ' + tname(1) + ' ' + S.roundPoints[1]);
+  },
+  skipQuestion(){
+    if (!confirm('Skip this question without playing it?')) return;
+    addLog('Question ' + (S.qIdx + 1) + ' skipped');
+    ACT.nextQuestion(null, true);
+  },
+  nextQuestion(d, silent){
+    if (S.qIdx >= S.questions.length - 1){ ACT.showFinal(); return; }
+    mutate(() => {
+      S.qIdx++;
+      S.phase = 'idle'; S.surveyOpen = false; S.review = []; S.board = [];
+      S.roundPoints = [0, 0]; S.turn = null; S.buzz = {open: false, openedAt: 0};
+    }, silent ? null : 'Moved to question ' + (S.qIdx + 2 <= S.questions.length ? S.qIdx + 1 : S.qIdx + 1));
+  },
+  showFinal(){ mutate(() => { S.phase = 'final'; fire('win'); }, 'Final leaderboard shown'); },
+  returnToGame(){ mutate(() => { S.phase = S.board.length ? 'board' : 'idle'; }, 'Returned to game'); },
+
+  /* --- buzzers --- */
+  openBuzzers(){ Backend.clearBuzz(GID); lastWinner = null; mutate(() => { S.buzz = {open: true, openedAt: Backend.now()}; }, 'Buzzers opened'); },
+  resetBuzzers(){ lastWinner = null; mutate(() => { S.buzz.open = true; S.buzz.openedAt = Backend.now(); S.turn = null; }, 'Buzzers reset'); },
+  closeBuzzers(){ mutate(() => { S.buzz.open = false; }, 'Buzzers closed'); },
+  mainBuzz(d){ tryBuzz(+d.t); },
+  buzzPress(d){ tryBuzz(+d.t); },
+
+  /* --- results --- */
+  downloadCsv(){
+    const rows = [['CSS Feud results', S.title], [], ['Question', tname(0), tname(1)]];
+    S.history.forEach((h, i) => rows.push(['Q' + (i + 1) + ': ' + h.q, h.pts[0], h.pts[1]]));
+    rows.push([], ['Total', S.teams[0].score, S.teams[1].score]);
+    rows.push([], ['Winning team', S.teams[0].score === S.teams[1].score ? 'Tie' : tname(S.teams[0].score > S.teams[1].score ? 0 : 1)]);
+    rows.push([], ['Activity log']);
+    S.log.slice().reverse().forEach(l => rows.push([fmtT(l.t), l.msg]));
+    const csv = rows.map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(',')).join('\n');
+    download('css-feud-results.csv', csv, 'text/csv');
+  },
+  printResults(){ window.print(); }
+};
+function tryBuzz(team){
+  if (!S || !S.buzz || !S.buzz.open || S.paused) return;
+  if (derivedWinner() !== null) return;
+  Backend.pressBuzz(GID, team);
+  SND.buzzer();
+}
+
+/* ========================= data binding ========================= */
+function bindChange(el){
+  const path = el.dataset.bind;
+  let v = el.type === 'checkbox' ? el.checked : el.value;
+  if (el.dataset.type === 'num') v = parseFloat(v) || 0;
+  pushUndo();
+  try { setPath(S, path, v); } catch(e){ return; }
+  if (/^teams\.\d\.score$/.test(path)) addLog('Score edited: ' + tname(+path.split('.')[1]) + ' → ' + v);
+  if (/^teams\.\d\.playerIdx$/.test(path)) addLog('Current player changed for ' + tname(+path.split('.')[1]));
+  if (/^review\.\d+\.(name|points)$/.test(path)) { /* silent */ }
+  persist();
+}
+
+/* ========================= renderers ========================= */
+function captureFocus(){
+  const el = document.activeElement;
+  if (!el || el === document.body) return null;
+  const key = el.dataset && el.dataset.bind ? 'bind:' + el.dataset.bind : (el.id ? 'id:' + el.id : null);
+  if (!key) return null;
+  return {key, start: el.selectionStart, end: el.selectionEnd, value: el.value};
+}
+function restoreFocus(f){
+  if (!f) return;
+  const el = f.key.startsWith('bind:')
+    ? document.querySelector('[data-bind="' + CSS.escape(f.key.slice(5)) + '"]')
+    : document.getElementById(f.key.slice(3));
+  if (!el) return;
+  el.focus();
+  if (f.value !== undefined && 'value' in el && el.type !== 'checkbox' && el.type !== 'color' && el.value !== f.value) el.value = f.value;
+  try { if (f.start != null && el.setSelectionRange) el.setSelectionRange(f.start, f.end); } catch(e){}
+}
+function drawQRs(){
+  if (typeof QRCode === 'undefined') return;
+  document.querySelectorAll('[data-qr]').forEach(el => {
+    el.innerHTML = '';
+    try {
+      new QRCode(el, {text: el.dataset.qr, width: +(el.dataset.size || 200), height: +(el.dataset.size || 200), colorDark: '#0E0F12', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M});
+    } catch(e){ el.textContent = el.dataset.qr; }
+  });
+}
+function render(){
+  const root = $('#root');
+  if (!root) return;
+  const f = captureFocus();
+  let html;
+  if (!S && MODE !== 'home') html = '<div class="launch"><p>Loading…</p></div>';
+  else if (MODE === 'admin') html = ADMIN_OK ? renderAdmin() : renderLogin();
+  else if (MODE === 'game') html = renderGame();
+  else if (MODE === 'survey') html = renderSurvey();
+  else if (MODE === 'buzzer') html = renderBuzzer();
+  else if (MODE === 'guide') html = renderGuide();
+  else html = renderLauncher();
+  root.innerHTML = html;
+  drawQRs();
+  restoreFocus(f);
+}
+const LOGO = '<img src="css-feud-logo.png" alt="CSS Feud" onerror="this.style.display=\'none\'">';
+
+/* ---------- launcher ---------- */
+function renderLauncher(){
+  const mode = HAS_FB ? '<span class="pill pill-green">Firebase connected — live multi-device sync</span>'
+                      : '<span class="pill pill-gold">Local demo mode — works across tabs of this browser</span>';
+  const cards = [
+    ['?mode=admin', 'ADMIN', 'Admin portal', 'Setup, host and judge controls'],
+    ['?mode=game', 'GAME', 'Main game screen', 'Show this on the big display'],
+    ['?mode=survey', 'SURVEY', 'Employee survey', 'Where the QR code leads'],
+    ['?mode=buzzer&team=1', 'BUZZER', 'Team 1 buzzer', 'Open on a phone'],
+    ['?mode=buzzer&team=2', 'BUZZER', 'Team 2 buzzer', 'Open on a phone'],
+    ['?mode=guide', 'GUIDE', 'How to play', 'Rules and flow for players and hosts']
+  ].map(c => '<a class="launch-card" href="' + c[0] + '"><span class="launch-mode-tag">' + c[1] + '</span><b>' + c[2] + '</b><span>' + c[3] + '</span></a>').join('');
+  return '<div class="launch">' + LOGO + '<p>Live employee game show — pick a screen</p><div class="launch-grid">' + cards + '</div><p style="margin-top:22px">' + mode + '</p></div>';
+}
+
+/* ---------- admin: login ---------- */
+function renderLogin(){
+  return '<div class="login-wrap"><div class="login-card">' + LOGO +
+    '<h2 style="font-size:19px;margin-bottom:4px">Admin portal</h2>' +
+    '<p style="font-size:13px;color:var(--ink-400);margin:0 0 16px">Host and judge controls. Enter the admin password.</p>' +
+    '<input id="admin-pass" type="password" placeholder="Password" data-enter="login" autofocus>' +
+    '<button class="btn btn-primary btn-big" style="width:100%;margin-top:14px" data-act="login">Log in</button>' +
+    '</div></div>';
+}
+
+/* ---------- admin: shell ---------- */
+function renderAdmin(){
+  const tabs = [
+    ['live', 'Live controls'], ['teams', 'Teams and players'], ['questions', 'Questions'],
+    ['setup', 'Setup and data'], ['log', 'Activity log'], ['help', 'Help and checklist']
+  ].map(t => '<button class="tab' + (ADMIN_TAB === t[0] ? ' on' : '') + '" data-act="tab" data-tab="' + t[0] + '">' + t[1] + '</button>').join('');
+  let body = '';
+  if (ADMIN_TAB === 'live') body = adminLive();
+  else if (ADMIN_TAB === 'teams') body = adminTeams();
+  else if (ADMIN_TAB === 'questions') body = adminQuestions();
+  else if (ADMIN_TAB === 'setup') body = adminSetup();
+  else if (ADMIN_TAB === 'log') body = adminLog();
+  else body = adminHelp();
+  return '<div class="admin"><div class="admin-top">' + LOGO +
+    '<div><div class="ttl">' + esc(S.title) + '</div><div class="sub">Admin portal · game ID <b>' + esc(GID) + '</b> · ' + (HAS_FB ? 'Firebase live sync' : 'local demo mode') + (S.demo ? ' · demo data' : '') + '</div></div>' +
+    '<div style="margin-left:auto;display:flex;gap:8px">' +
+    '<button class="btn btn-sm btn-ghost" style="color:#fff" data-act="mute">' + (MUTED ? 'Unmute' : 'Mute') + '</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="saveNow">Save</button>' +
+    '<button class="btn btn-sm btn-ghost" style="color:#fff" data-act="logout">Log out</button></div></div>' +
+    '<div class="tabs">' + tabs + '</div><div class="admin-body">' + body + '</div></div>';
+}
+function phasePill(){
+  const map = {idle: ['pill-grey', 'Waiting to start question'], survey: ['pill-blue', 'Survey open'], review: ['pill-gold', 'Reviewing answers (private)'], board: ['pill-green', 'Round in play'], roundEnd: ['pill-gold', 'Round results'], final: ['pill-gold', 'Final leaderboard']};
+  const m = map[S.phase] || map.idle;
+  return '<span class="pill ' + m[0] + '">' + m[1] + '</span>' + (S.paused ? ' <span class="pill pill-red">Paused</span>' : '');
+}
+
+/* ---------- admin: live tab ---------- */
+function adminLive(){
+  const q = curQ();
+  let h = '<div class="panel"><div class="row" style="justify-content:space-between">' +
+    '<div><h3 style="font-size:17px">Question ' + (S.questions.length ? S.qIdx + 1 : 0) + ' of ' + S.questions.length + '</h3>' +
+    '<div style="font-size:15px;margin-top:4px">' + (q ? esc(q.text) || '<i>(no text yet — add it in the Questions tab)</i>' : '<i>No questions yet — add one in the Questions tab.</i>') + '</div>' +
+    (q && q.notes ? '<div class="hint" style="margin-top:6px">Judge notes: ' + esc(q.notes) + '</div>' : '') + '</div>' +
+    '<div style="text-align:right">' + phasePill() +
+    '<div class="row" style="margin-top:10px;justify-content:flex-end">' +
+    '<button class="btn btn-sm btn-outline" data-act="undo">↶ Undo</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="redo">↷ Redo</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="pause">' + (S.paused ? 'Resume' : 'Pause') + '</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="skipQuestion">Skip question</button></div></div></div></div>';
+
+  h += '<div class="panel"><h3>Scores</h3><div class="grid2">' + [0, 1].map(i => {
+    const t = S.teams[i];
+    return '<div class="row" style="border:1.5px solid var(--ink-100);border-radius:10px;padding:10px 14px">' +
+      '<span class="team-dot" style="background:' + esc(t.color) + ';width:13px;height:13px;border-radius:50%"></span>' +
+      '<b style="flex:1">' + esc(tname(i)) + '</b>' +
+      (S.turn === i ? '<span class="pill pill-gold">Turn</span>' : '<button class="btn btn-sm btn-ghost" data-act="setTurn" data-t="' + i + '">Give turn</button>') +
+      '<span style="font-size:12px;color:var(--ink-400)">round ' + S.roundPoints[i] + '</span>' +
+      '<input data-bind="teams.' + i + '.score" data-type="num" type="number" value="' + t.score + '" style="width:86px;text-align:center;font-weight:800;font-size:17px">' +
+      '</div>';
+  }).join('') + '</div>' +
+  '<div class="row" style="margin-top:10px"><label style="margin:0">Bonus / deduct:</label>' +
+  '<select id="bonus-team" style="width:auto"><option value="0">' + esc(tname(0)) + '</option><option value="1">' + esc(tname(1)) + '</option></select>' +
+  '<input id="bonus-pts" type="number" placeholder="Points (± )" style="width:110px">' +
+  '<input id="bonus-why" type="text" placeholder="Reason (for the log)" style="width:210px;flex:1;min-width:140px">' +
+  '<button class="btn btn-sm btn-blue" data-act="bonus">Apply</button>' +
+  '<button class="btn btn-sm btn-outline" data-act="transferTurn">Switch team turn</button></div></div>';
+
+  if (S.phase === 'idle' || !S.phase){
+    h += '<div class="panel"><h3>Start this question</h3><p class="hint">Opens the survey: the main screen shows the question with a QR code, and employees submit answers from their phones.</p>' +
+      '<div class="row"><button class="btn btn-primary btn-big" data-act="startSurvey">Start survey</button>' +
+      (q && parsePre(q).length ? '<button class="btn btn-outline" data-act="boardFromPre">Build board from pre-approved answers</button>' : '') +
+      '</div></div>';
+  }
+  if (S.phase === 'survey'){
+    const n = Object.keys(RESP).length;
+    h += '<div class="panel"><h3>Survey is open</h3><div class="row" style="gap:26px;align-items:flex-start">' +
+      '<div style="text-align:center"><div class="bigcount">' + n + '</div><div class="hint">responses so far</div></div>' +
+      '<div style="flex:1;min-width:220px"><p class="hint">Answers stay hidden until you close the survey. ' + (S.surveyEndsAt ? 'Auto-closes when the timer ends (<span class="timer-chip" data-timer></span>s left).' : 'No time limit set.') + '</p>' +
+      '<div class="row"><button class="btn btn-red btn-big" data-act="closeSurvey">Close survey and review answers</button>' +
+      '<button class="btn btn-outline" data-act="simResponses">Simulate 14 responses</button>' +
+      '<button class="btn btn-outline btn-sm" data-act="copy" data-text="' + esc(surveyURL()) + '">Copy survey link</button></div></div>' +
+      '<div class="qrbox-admin"><div data-qr="' + esc(surveyURL()) + '" data-size="110"></div></div>' +
+      '</div></div>';
+  }
+  if (S.phase === 'review') h += adminReview();
+  if (S.phase === 'board') h += adminJudge();
+  if (S.phase === 'roundEnd'){
+    h += '<div class="panel"><h3>Round complete</h3><p class="hint">The main screen is showing the round results.</p><div class="row">' +
+      (S.qIdx < S.questions.length - 1 ? '<button class="btn btn-primary btn-big" data-act="nextQuestion">Next question →</button>' : '') +
+      '<button class="btn btn-blue" data-act="showFinal">Show final leaderboard</button>' +
+      '<button class="btn btn-outline" data-act="returnToGame">Back to the board</button></div></div>';
+  }
+  if (S.phase === 'final'){
+    h += '<div class="panel"><h3>Final leaderboard is showing</h3><div class="row">' +
+      '<button class="btn btn-primary" data-act="downloadCsv">Download results (CSV)</button>' +
+      '<button class="btn btn-outline" data-act="printResults">Print results</button>' +
+      '<button class="btn btn-outline" data-act="returnToGame">Return to game</button>' +
+      '<button class="btn btn-blue" data-act="newGame">Start a new game</button></div>' + finalTable() + '</div>';
+  }
+  h += adminBuzzPanel();
+  return h;
+}
+function finalTable(){
+  const order = S.teams[0].score >= S.teams[1].score ? [0, 1] : [1, 0];
+  return '<div class="print-area" style="margin-top:14px"><table class="scores-t"><tr><th>Place</th><th>Team</th><th>Players</th><th>Score</th></tr>' +
+    order.map((t, i) => '<tr><td>' + (i + 1) + (i === 0 && S.teams[order[0]].score !== S.teams[order[1]].score ? ' 🏆' : '') + '</td><td><b>' + esc(tname(t)) + '</b></td><td>' + S.teams[t].players.filter(Boolean).map(esc).join(', ') + '</td><td><b>' + S.teams[t].score + '</b></td></tr>').join('') +
+    '</table></div>';
+}
+function adminBuzzPanel(){
+  const ps = validPresses();
+  const w = derivedWinner();
+  const status = !S.buzz.open ? '<span class="pill pill-grey">Buzzers closed</span>'
+    : w === null ? '<span class="pill pill-green">Buzzers armed — waiting for a press</span>'
+    : '<span class="pill pill-gold">Locked — ' + esc(tname(w)) + ' buzzed first</span>';
+  return '<div class="panel"><h3>Buzzers</h3><div class="row" style="margin:8px 0">' + status +
+    '<button class="btn btn-sm btn-green" data-act="openBuzzers">Open buzzers</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="resetBuzzers">Reset (B)</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="closeBuzzers">Close</button></div>' +
+    (ps.length ? '<div class="hint">Press order: ' + ps.map((p, i) => esc(tname(p.team)) + (i === 0 ? ' (first)' : ' +' + (p.t - ps[0].t) + ' ms')).join(' · ') + '</div>' : '') +
+    '<div class="row" style="margin-top:10px;align-items:flex-start;gap:22px">' + [1, 2].map(t =>
+      '<div style="text-align:center"><div class="qrbox-admin"><div data-qr="' + esc(buzzerURL(t)) + '" data-size="92"></div></div>' +
+      '<div style="font-size:12px;margin-top:5px"><b>' + esc(tname(t - 1)) + '</b> buzzer</div>' +
+      '<button class="btn btn-sm btn-ghost" data-act="copy" data-text="' + esc(buzzerURL(t)) + '">Copy link</button></div>').join('') +
+    '<p class="hint" style="flex:1;min-width:180px">Each team opens its own buzzer page on a phone. The main screen also has on-screen buzzers, and keys <b>1</b> / <b>2</b> buzz, <b>B</b> resets.</p></div></div>';
+}
+function adminReview(){
+  const groups = S.review || [];
+  const sugg = mergeSuggestions();
+  return '<div class="panel"><h3>Answer review — private</h3>' +
+    '<div class="notice">Employees and the main screen cannot see this. Merge, rename, re-point and reorder, then approve. Points default to the number of employees who gave that answer.</div>' +
+    '<div class="row" style="margin-bottom:10px">' +
+    '<button class="btn btn-sm btn-blue" data-act="grpMerge">Merge ticked groups</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="grpHideLow">Hide answers with ≤ 1 vote</button>' +
+    '<span class="hint" style="margin:0">' + groups.filter(g => g.include).length + ' included · board shows top ' + (curQ() ? curQ().maxAnswers : 8) + '</span></div>' +
+    (sugg.length ? '<div class="hint" style="margin-bottom:8px">Possible duplicates: ' + sugg.map(p => '<button class="btn btn-sm btn-outline" style="margin:2px" data-act="grpMergePair" data-a="' + p[0].id + '" data-b="' + p[1].id + '">merge “' + esc(p[0].name) + '” + “' + esc(p[1].name) + '”</button>').join(' ') + '</div>' : '') +
+    groups.map((g, i) => {
+      const gi = S.review.indexOf(g);
+      return '<div class="group-row' + (g.include ? '' : ' off') + '">' +
+      '<input type="checkbox" class="grp-sel" data-gid="' + g.id + '" style="width:auto">' +
+      '<span class="cnt">' + g.count + '×</span>' +
+      '<input type="text" data-bind="review.' + gi + '.name" value="' + esc(g.name) + '">' +
+      '<input class="pts" type="number" data-bind="review.' + gi + '.points" data-type="num" value="' + (+g.points || 0) + '" title="Points">' +
+      '<label style="margin:0;display:flex;align-items:center;gap:4px;font-size:12px"><input type="checkbox" style="width:auto" data-bind="review.' + gi + '.include"' + (g.include ? ' checked' : '') + '>show</label>' +
+      '<button class="icon-btn" data-act="grpUp" data-gid="' + g.id + '" title="Move up">↑</button>' +
+      '<button class="icon-btn" data-act="grpDown" data-gid="' + g.id + '" title="Move down">↓</button>' +
+      '<button class="icon-btn" data-act="grpSplit" data-gid="' + g.id + '" title="Separate grouped answers">⑃</button>' +
+      '<button class="icon-btn" data-act="grpDel" data-gid="' + g.id + '" title="Delete">✕</button>' +
+      (g.members.length ? '<div class="members">Submitted as: ' + g.members.slice(0, 10).map(esc).join(' · ') + (g.members.length > 10 ? ' · …' : '') + '</div>' : (g.pre ? '<div class="members">Pre-approved answer</div>' : '')) +
+      '</div>';
+    }).join('') +
+    '<div class="row" style="margin-top:10px"><input id="grp-new" type="text" placeholder="Add a missing answer" style="flex:1;min-width:160px" data-enter="grpAdd"><input id="grp-new-pts" type="number" placeholder="Points" style="width:90px"><button class="btn btn-sm btn-outline" data-act="grpAdd">Add answer</button></div>' +
+    '<div class="row" style="margin-top:14px"><button class="btn btn-green btn-big" data-act="approveBoard">Approve and create board</button>' +
+    '<button class="btn btn-outline" data-act="resetResponses">Delete all responses</button></div></div>';
+}
+function adminJudge(){
+  const w = derivedWinner();
+  return '<div class="panel"><h3>Judge console</h3>' +
+    '<p class="hint">Turn: <b>' + (S.turn === null ? 'not set — open buzzers or give the turn' : esc(tname(S.turn))) + '</b>' +
+    (S.turn !== null ? ' · answering player: <b>' + esc(S.teams[S.turn].players[S.teams[S.turn].playerIdx] || 'Player ' + (S.teams[S.turn].playerIdx + 1)) + '</b>' : '') + '</p>' +
+    '<div class="row" style="margin-bottom:12px">' +
+    '<button class="btn btn-red btn-big" data-act="wrong">✕ Wrong — switch team</button>' +
+    '<button class="btn btn-outline" data-act="revealAll">Reveal all remaining</button>' +
+    '<button class="btn btn-blue" data-act="endRound">End round</button>' +
+    (S.qIdx < S.questions.length - 1 ? '<button class="btn btn-outline" data-act="nextQuestion">Next question</button>' : '<button class="btn btn-outline" data-act="showFinal">Final leaderboard</button>') +
+    '</div>' +
+    S.board.map((a, i) => '<div class="judge-answer' + (a.revealed ? ' rev' : '') + '">' +
+      '<b style="color:var(--gold-600);font-family:Inter">' + (i + 1) + '</b>' +
+      '<span class="atext">' + esc(a.text) + (a.awarded ? ' <span class="pill pill-green" style="font-size:10.5px">awarded → ' + esc(tname(a.awardedTo)) + '</span>' : '') + '</span>' +
+      '<input class="pts" type="number" style="width:70px;text-align:center" data-bind="board.' + i + '.points" data-type="num" value="' + a.points + '" title="Points">' +
+      '<input type="text" style="width:150px" data-bind="board.' + i + '.text" value="' + esc(a.text) + '" title="Edit answer text">' +
+      '<button class="btn btn-sm btn-green" data-act="revealAward" data-aid="' + a.id + '">✓ Correct</button>' +
+      '<button class="btn btn-sm btn-outline" data-act="' + (a.revealed ? 'hideAns' : 'revealOnly') + '" data-aid="' + a.id + '">' + (a.revealed ? 'Hide' : 'Reveal only') + '</button>' +
+      '<button class="icon-btn" data-act="removeAns" data-aid="' + a.id + '" title="Remove">✕</button>' +
+      '</div>').join('') +
+    '<div class="row" style="margin-top:10px"><input id="ans-new" type="text" placeholder="Add an answer during the round" style="flex:1;min-width:160px" data-enter="addAns"><input id="ans-new-pts" type="number" placeholder="Points" style="width:90px"><button class="btn btn-sm btn-outline" data-act="addAns">Add to board</button></div>' +
+    '<p class="hint" style="margin-top:10px">A spoken answer can be correct even if it is not on the board (for example “Man United” for “Manchester United”) — reveal the matching answer with <b>✓ Correct</b>, or use <b>Bonus / deduct</b> above to award custom points.</p>' +
+    '<div class="row" style="margin-top:6px"><label style="margin:0">Current player:</label>' + [0, 1].map(t =>
+      '<select data-bind="teams.' + t + '.playerIdx" data-type="num" style="width:auto">' +
+      S.teams[t].players.map((p, i) => '<option value="' + i + '"' + (S.teams[t].playerIdx === i ? ' selected' : '') + '>' + esc(tname(t)) + ': ' + esc(p || 'Player ' + (i + 1)) + '</option>').join('') + '</select>').join('') +
+    '</div></div>';
+}
+
+/* ---------- admin: teams ---------- */
+function adminTeams(){
+  return '<div class="grid2">' + [0, 1].map(i => {
+    const t = S.teams[i];
+    return '<div class="panel"><h3>Team ' + (i + 1) + '</h3>' +
+      '<label>Team name</label><input data-bind="teams.' + i + '.name" value="' + esc(t.name) + '">' +
+      '<div class="row"><div style="flex:1"><label>Team colour</label><input type="color" data-bind="teams.' + i + '.color" value="' + esc(t.color) + '" style="height:42px;padding:4px"></div>' +
+      '<div style="flex:3"><label>Logo image URL (optional)</label><input data-bind="teams.' + i + '.logo" value="' + esc(t.logo) + '" placeholder="https://…"></div></div>' +
+      '<label>Players (five)</label>' +
+      t.players.map((p, j) => '<input style="margin-bottom:6px" data-bind="teams.' + i + '.players.' + j + '" value="' + esc(p) + '" placeholder="Player ' + (j + 1) + '">').join('') +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+/* ---------- admin: questions ---------- */
+function adminQuestions(){
+  return '<div class="panel"><div class="row" style="justify-content:space-between"><div><h3>Questions (' + S.questions.length + ')</h3><p class="hint">The number of questions in the game is simply the length of this list. Drag order with ↑ ↓.</p></div>' +
+    '<button class="btn btn-primary" data-act="qAdd">+ Add question</button></div></div>' +
+    S.questions.map((q, i) => {
+      const open = EDIT_Q === i;
+      return '<div class="qitem' + (i === S.qIdx ? ' cur' : '') + '"><div class="qnum">' + (i + 1) + '</div><div style="flex:1;min-width:0">' +
+      '<div class="row" style="justify-content:space-between"><b style="flex:1">' + (esc(q.text) || '<i style="color:var(--ink-300)">Untitled question</i>') + '</b>' +
+      '<span class="hint" style="margin:0">' + (q.category ? esc(q.category) + ' · ' : '') + 'top ' + q.maxAnswers + (q.timeLimit ? ' · ' + q.timeLimit + 's' : '') + (i === S.qIdx ? ' · current' : '') + '</span></div>' +
+      (open ?
+        '<label>Question text</label><input data-bind="questions.' + i + '.text" value="' + esc(q.text) + '">' +
+        '<div class="row"><div style="flex:1"><label>Category (optional)</label><input data-bind="questions.' + i + '.category" value="' + esc(q.category) + '"></div>' +
+        '<div style="flex:1"><label>Image URL (optional)</label><input data-bind="questions.' + i + '.image" value="' + esc(q.image) + '"></div>' +
+        '<div><label>Time limit (s, 0 = none)</label><input type="number" data-type="num" data-bind="questions.' + i + '.timeLimit" value="' + (q.timeLimit || 0) + '" style="width:120px"></div>' +
+        '<div><label>Max answers on board</label><input type="number" data-type="num" data-bind="questions.' + i + '.maxAnswers" value="' + (q.maxAnswers || 6) + '" style="width:120px"></div></div>' +
+        '<label>Pre-approved answers (optional) — one per line, as <i>Answer | points</i></label>' +
+        '<textarea rows="3" data-bind="questions.' + i + '.preRaw">' + esc(q.preRaw) + '</textarea>' +
+        '<label>Judge notes (optional, private)</label><input data-bind="questions.' + i + '.notes" value="' + esc(q.notes) + '">'
+      : '') +
+      '</div><div style="display:flex;flex-direction:column;gap:5px">' +
+      '<button class="icon-btn" data-act="qEdit" data-i="' + i + '" title="Edit">' + (open ? '▲' : '✎') + '</button>' +
+      '<button class="icon-btn" data-act="qUp" data-i="' + i + '" title="Move up">↑</button>' +
+      '<button class="icon-btn" data-act="qDown" data-i="' + i + '" title="Move down">↓</button>' +
+      '<button class="icon-btn" data-act="qDup" data-i="' + i + '" title="Duplicate">⧉</button>' +
+      '<button class="icon-btn" data-act="qDel" data-i="' + i + '" title="Delete">✕</button>' +
+      (i !== S.qIdx ? '<button class="btn btn-sm btn-outline" data-act="qMakeCurrent" data-i="' + i + '">Play</button>' : '') +
+      '</div></div>';
+    }).join('');
+}
+
+/* ---------- admin: setup ---------- */
+function adminSetup(){
+  const idx = INDEX || {};
+  const games = Object.keys(idx).sort((a, b) => (idx[b].t || 0) - (idx[a].t || 0));
+  return '<div class="grid2"><div>' +
+    '<div class="panel"><h3>This game</h3>' +
+    '<label>Game title</label><input data-bind="title" value="' + esc(S.title) + '">' +
+    '<label>Game ID</label><input value="' + esc(GID) + '" disabled>' +
+    '<p class="hint">Auto-save is on — every change is stored immediately and survives page refreshes. The join code shown to employees is <b>' + esc(S.joinCode) + '</b>.</p>' +
+    '<div class="row"><button class="btn btn-primary" data-act="newGame">Create a new game</button>' +
+    '<button class="btn btn-outline" data-act="saveNow">Save now</button>' +
+    '<button class="btn btn-outline" data-act="exportJson">Export JSON</button>' +
+    '<label class="btn btn-outline" style="margin:0">Import JSON<input id="import-file" type="file" accept=".json" style="display:none"></label></div></div>' +
+    '<div class="panel"><h3>Resume a saved game</h3>' +
+    (games.length ? games.map(g => '<div class="row" style="padding:7px 0;border-bottom:1px solid var(--ink-100)"><b style="flex:1">' + esc(idx[g].title || g) + '</b><span class="hint" style="margin:0">' + g + (g === GID ? ' · open now' : '') + '</span>' + (g === GID ? '' : '<button class="btn btn-sm btn-outline" data-act="loadGame" data-g="' + esc(g) + '">Open</button>') + '</div>').join('') : '<p class="hint">No other saved games yet.</p>') + '</div>' +
+    '<div class="panel"><h3>Demo content</h3><p class="hint">A ready-made game with two teams, five players each, three questions and sample survey responses.</p>' +
+    '<div class="row"><button class="btn btn-outline" data-act="loadDemo">Load demo game</button><button class="btn btn-outline" data-act="removeDemo">Remove demo data</button></div></div>' +
+    '</div><div>' +
+    '<div class="panel"><h3>Connection</h3>' + (HAS_FB ? '<p class="hint">✓ Firebase is configured — all devices sync live through your Realtime Database.</p>' : '<p class="hint">Running in <b>local demo mode</b>: admin, game screen, survey and buzzers sync across tabs of this browser only. To play across phones and laptops, paste your Firebase config into <code>FIREBASE_CONFIG</code> at the top of the script in <code>index.html</code> — see the Help tab.</p>') + '</div>' +
+    '<div class="panel danger-zone"><h3>Resets</h3><p class="hint">Each action asks for confirmation.</p><div class="row">' +
+    '<button class="btn btn-sm btn-outline" data-act="resetQuestion">Reset current question</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="resetScores">Reset scores only</button>' +
+    '<button class="btn btn-sm btn-outline" data-act="resetResponses">Reset survey responses</button>' +
+    '<button class="btn btn-sm btn-red" data-act="resetAll">Reset entire game</button></div></div>' +
+    '<div class="panel"><h3>Sound</h3><div class="row"><button class="btn btn-outline" data-act="mute">' + (MUTED ? 'Unmute sounds' : 'Mute sounds') + '</button><span class="hint" style="margin:0">Applies to this device only.</span></div></div>' +
+    '</div></div>';
+}
+
+/* ---------- admin: log / help ---------- */
+function adminLog(){
+  return '<div class="panel"><h3>Activity log</h3><p class="hint">Private record of answers, points, turn changes and adjustments. Newest first.</p>' +
+    ((S.log || []).length ? S.log.map(l => '<div class="logrow"><time>' + fmtT(l.t) + '</time><span>' + esc(l.msg) + '</span></div>').join('') : '<p class="hint">Nothing yet.</p>') + '</div>';
+}
+function adminHelp(){
+  return '<div class="panel helpdoc"><h3>Setup, hosting and test checklist</h3>' +
+    '<h4>Firebase (for real multi-device play)</h4><ol>' +
+    '<li>Go to <b>console.firebase.google.com</b> and add a project.</li>' +
+    '<li>Build → <b>Realtime Database</b> → create database (test mode is fine for an internal event).</li>' +
+    '<li>Build → <b>Authentication</b> → sign-in method → enable <b>Anonymous</b>.</li>' +
+    '<li>Project settings → your apps → add a <b>web app</b> → copy the config object.</li>' +
+    '<li>Open <code>index.html</code> and paste the values into <code>FIREBASE_CONFIG</code> near the top of the script.</li></ol>' +
+    '<h4>Hosting</h4><ul>' +
+    '<li><b>Firebase Hosting:</b> <code>npm i -g firebase-tools</code>, <code>firebase init hosting</code>, <code>firebase deploy</code>.</li>' +
+    '<li><b>GitHub Pages:</b> push <code>index.html</code> + <code>css-feud-logo.png</code> to a repo → Settings → Pages.</li>' +
+    '<li><b>Netlify:</b> drag the folder onto <code>app.netlify.com/drop</code>.</li></ul>' +
+    '<p>Phones must reach the same public URL that the QR codes encode — use the hosted URL, not localhost. Without Firebase the game still runs fully in this browser (open the game screen, survey and buzzers in separate tabs).</p>' +
+    '<h4>Admin password</h4><p>Change <code>ADMIN_PASSWORD</code> at the top of the script (currently the default from the build brief). It is never shown on public screens.</p>' +
+    '<h4>Test checklist</h4><ol>' +
+    '<li>Admin login with the password.</li>' +
+    '<li>Teams tab: names, colours, five players per team.</li>' +
+    '<li>Questions tab: add, edit, reorder, duplicate, delete.</li>' +
+    '<li>Live: Start survey → QR appears on the game screen.</li>' +
+    '<li>Open the survey link on 2+ devices/tabs and submit answers (one per device per question).</li>' +
+    '<li>Close survey → answers are grouped with counts; merge/rename/hide as needed.</li>' +
+    '<li>Approve and create board → covered slots appear on the game screen.</li>' +
+    '<li>Open buzzers → buzz from the phone pages or keys 1/2; first press locks.</li>' +
+    '<li>✓ Correct keeps the turn; ✕ Wrong switches teams.</li>' +
+    '<li>Bonus / deduct for judge-awarded points.</li>' +
+    '<li>End round → results screen; last question → final leaderboard with confetti.</li>' +
+    '<li>Refresh any screen mid-round — state is restored.</li></ol></div>';
+}
+
+/* ---------- game screen ---------- */
+function teamPanel(i, side){
+  const t = S.teams[i];
+  const isTurn = S.turn === i && (S.phase === 'board' || S.phase === 'roundEnd');
+  return '<div class="team-panel' + (isTurn ? ' turn' : '') + '">' +
+    (isTurn ? '<div class="turn-flag">THEIR TURN</div>' : '') +
+    '<div class="team-name">' + (t.logo ? '<img class="team-logo" src="' + esc(t.logo) + '" alt="" onerror="this.style.display=\'none\'">' : '<span class="team-dot" style="background:' + esc(t.color) + ';color:' + esc(t.color) + '"></span>') + esc(tname(i)) + '</div>' +
+    '<div class="team-score" data-score="' + i + '">' + t.score + '</div>' +
+    '<div class="round-pts">Round points: ' + S.roundPoints[i] + '</div>' +
+    '<div class="players">' + t.players.map((p, j) => '<div class="player' + (isTurn && t.playerIdx === j ? ' now' : '') + '"><span class="pnum">' + (j + 1) + '</span>' + esc(p || 'Player ' + (j + 1)) + '</div>').join('') + '</div>' +
+    '</div>';
+}
+function boardGrid(){
+  const n = S.board.length;
+  const cols = n > 4 ? 2 : 1;
+  return '<div class="board" style="grid-template-columns:repeat(' + cols + ',1fr)">' +
+    S.board.map((a, i) => '<div class="slot' + (a.revealed ? ' open' : '') + '"><div class="slot-inner">' +
+      '<div class="slot-face slot-front"><span class="n">' + (i + 1) + '</span></div>' +
+      '<div class="slot-face slot-back"><span class="atxt">' + esc(a.text) + '</span>' +
+      (a.awarded ? '<span class="who">' + esc(tname(a.awardedTo)) + '</span>' : '') +
+      '<span class="apts">' + a.points + '</span></div>' +
+      '</div></div>').join('') + '</div>';
+}
+function renderGame(){
+  const q = curQ();
+  let center = '';
+  if (!q || S.phase === 'idle'){
+    center = '<div class="idle-hero">' + LOGO + '<p>' + (q ? 'Get ready — question ' + (S.qIdx + 1) + ' is coming up' : 'Waiting for the host to set up the game') + '</p></div>';
+  } else {
+    const qb = '<div class="qbanner"><div class="qtag">' + (q.category ? esc(q.category).toUpperCase() + ' · ' : '') + 'QUESTION ' + (S.qIdx + 1) + ' OF ' + S.questions.length + '</div><div class="qtext">' + esc(q.text) + '</div>' +
+      (q.image ? '<img src="' + esc(q.image) + '" alt="" style="max-height:120px;border-radius:10px;margin-top:10px" onerror="this.style.display=\'none\'">' : '') + '</div>';
+    if (S.phase === 'survey'){
+      const n = Object.keys(RESP).length;
+      center = qb + '<div class="qr-stage"><div class="qr-white"><div data-qr="' + esc(surveyURL()) + '" data-size="230"></div></div>' +
+        '<div class="qr-side"><h3>Scan the QR code and submit your answer</h3>' +
+        '<div class="joincode">' + esc(S.joinCode) + '</div>' +
+        '<div class="cnt-line"><b>' + n + '</b> answer' + (n === 1 ? '' : 's') + ' received' + (S.surveyEndsAt ? ' · <span class="timer-chip" data-timer></span>s left' : '') + '</div>' +
+        '<div style="color:var(--blue-300);font-size:13.5px;margin-top:6px">Answers stay secret until the host builds the board.</div></div></div>';
+    } else if (S.phase === 'review'){
+      center = qb + '<div class="idle-hero" style="flex:1"><h3 style="font-size:clamp(20px,2.6vw,32px)">The host is building the answer board<span class="waiting-dot"></span><span class="waiting-dot"></span><span class="waiting-dot"></span></h3><p>' + Object.keys(RESP).length + ' answers were submitted</p></div>';
+    } else {
+      center = qb + boardGrid();
+    }
+  }
+  const w = derivedWinner();
+  const buzzChip = !S.buzz.open
+    ? '<div class="status-chip"><span class="status-dot off"></span>Buzzers closed</div>'
+    : w === null
+      ? '<div class="status-chip hot"><span class="status-dot hot"></span>BUZZERS OPEN — hit it!</div>'
+      : '<div class="status-chip"><span class="status-dot"></span>' + esc(tname(w)) + ' buzzed first</div>';
+  const mainBuzz = S.buzz.open && (S.phase === 'board') ? '<div class="mainbuzz-row">' + [0, 1].map(t =>
+    '<button class="mainbuzz" style="background:' + esc(S.teams[t].color) + '" data-act="mainBuzz" data-t="' + t + '"' + (w !== null ? ' disabled' : '') + '>' + esc(tname(t)) + '</button>').join('') +
+    '</div><div class="kbd-hint" style="text-align:center;width:100%">Keyboard: 1 = ' + esc(tname(0)) + ' · 2 = ' + esc(tname(1)) + ' · B = reset</div>' : '';
+  let overlay = '';
+  if (Date.now() < BANNER_UNTIL && w !== null)
+    overlay = '<div class="buzz-banner"><div class="inner"><div class="lbl">FIRST BUZZ</div><div class="who" style="color:' + esc(S.teams[w].color) + '">' + esc(tname(w)) + '</div></div></div>';
+  if (S.phase === 'roundEnd') overlay = roundEndOverlay();
+  if (S.phase === 'final') overlay = finalOverlay();
+  if (S.paused) overlay += '<div class="buzz-banner"><div class="inner"><div class="lbl">PAUSED</div><div class="who">☕ Short break</div></div></div>';
+  return '<div class="stage"><div class="stage-top">' + LOGO +
+    '<div><div class="stage-title">' + esc(S.title) + '</div><div class="stage-progress">Question ' + Math.min(S.qIdx + 1, S.questions.length) + ' of ' + S.questions.length + ' · ' + gameProgress() + '</div></div>' +
+    '<div class="stage-tools"><button class="tool-btn" data-act="mute">' + (MUTED ? '🔇 Sound off' : '🔊 Sound on') + '</button><button class="tool-btn" data-act="fullscreen">⛶ Full screen</button></div></div>' +
+    '<div class="stage-main">' + teamPanel(0) + '<div class="stage-center">' + center + '</div>' + teamPanel(1) + '</div>' +
+    '<div class="stage-status">' + buzzChip +
+    '<div class="status-chip">Round points: ' + esc(tname(0)) + ' ' + S.roundPoints[0] + ' — ' + S.roundPoints[1] + ' ' + esc(tname(1)) + '</div>' +
+    (S.phase === 'survey' ? '<div class="status-chip"><span class="status-dot"></span>Survey open — ' + Object.keys(RESP).length + ' responses</div>' : '') +
+    '</div>' + mainBuzz + overlay + '</div>';
+}
+function gameProgress(){
+  const done = Math.min(S.history.length, S.questions.length);
+  return done + ' round' + (done === 1 ? '' : 's') + ' played';
+}
+function roundEndOverlay(){
+  const rp = S.roundPoints;
+  const winner = rp[0] === rp[1] ? null : (rp[0] > rp[1] ? 0 : 1);
+  const order = S.teams[0].score >= S.teams[1].score ? [0, 1] : [1, 0];
+  return '<div class="overlay-screen"><div class="sub">ROUND ' + (S.qIdx + 1) + ' RESULTS</div>' +
+    '<h2>' + (winner === null ? 'Round tied!' : esc(tname(winner)) + ' takes the round!') + '</h2>' +
+    '<p style="color:var(--blue-200);margin:0">Round points: ' + esc(tname(0)) + ' ' + rp[0] + ' — ' + rp[1] + ' ' + esc(tname(1)) + '</p>' +
+    order.map((t, i) => '<div class="rank-row' + (i === 0 ? ' win' : '') + '"><div class="rank-pos">' + (i + 1) + '</div><div class="rank-name"><span class="team-dot" style="background:' + esc(S.teams[t].color) + ';color:' + esc(S.teams[t].color) + '"></span>' + esc(tname(t)) + (i === 0 && S.teams[order[0]].score !== S.teams[order[1]].score ? '<span class="crown">LEADING</span>' : '') + '</div><div class="rank-score">' + S.teams[t].score + '</div></div>').join('') +
+    '<p style="color:var(--blue-300);font-size:14px">' + gameProgress() + ' · ' + (S.qIdx < S.questions.length - 1 ? 'next question coming up' : 'that was the last question') + '</p></div>';
+}
+function finalOverlay(){
+  const order = S.teams[0].score >= S.teams[1].score ? [0, 1] : [1, 0];
+  const tie = S.teams[0].score === S.teams[1].score;
+  const champs = S.teams[order[0]].players.filter(Boolean).map(esc).join(' · ');
+  return '<div class="overlay-screen"><div class="sub">FINAL LEADERBOARD</div>' +
+    '<h2>' + (tie ? 'It is a tie!' : '🏆 ' + esc(tname(order[0])) + ' wins!') + '</h2>' +
+    order.map((t, i) => '<div class="rank-row' + (i === 0 && !tie ? ' win' : '') + '"><div class="rank-pos">' + (i + 1) + '</div><div class="rank-name"><span class="team-dot" style="background:' + esc(S.teams[t].color) + ';color:' + esc(S.teams[t].color) + '"></span>' + esc(tname(t)) + (i === 0 && !tie ? '<span class="crown">CHAMPIONS</span>' : '') + '</div><div class="rank-score">' + S.teams[t].score + '</div></div>').join('') +
+    (!tie && champs ? '<div class="winners-list"><b>Winning team:</b> ' + champs + '</div>' : '') +
+    '</div>';
+}
+
+/* ---------- guide ---------- */
+function renderGuide(){
+  const sec = (n, title, body) => '<div class="guide-card"><div class="guide-step">' + n + '</div><div><h3>' + title + '</h3>' + body + '</div></div>';
+  return '<div class="guide"><a class="back-btn" href="' + baseURL() + '">← Back</a>' +
+    '<img class="glogo" src="css-feud-logo.png" alt="CSS Feud" onerror="this.style.display=\'none\'">' +
+    '<p class="guide-intro">Two teams of five, questions answered live by everyone in the room, and a race to the buzzer. Here is how a game runs.</p>' +
+    '<h2 class="guide-h">How a round works</h2>' +
+    sec(1, 'The question appears', 'The host starts a question and the big screen shows it together with a QR code.') +
+    sec(2, 'Everyone answers the survey', 'Scan the QR code with your phone and submit one anonymous answer. Nobody sees the answers while the survey is open — only a counter of how many people have responded.') +
+    sec(3, 'The board is built', 'The host closes the survey. Matching answers are grouped and counted, and the most popular ones become the hidden answer board. Each answer is worth the number of colleagues who gave it.') +
+    sec(4, 'Buzz to play', 'The buzzers open. Each team has a buzzer page on a phone — the first press wins the turn and locks both buzzers.') +
+    sec(5, 'Guess the board', 'One player from the team with the turn gives an answer out loud. If it is on the board, it is revealed and the points go to that team, and the same team continues with its next player. If it is wrong, the turn switches to the other team immediately — there is no three-strike rule.') +
+    sec(6, 'The round ends', 'The round finishes when the whole board is revealed or the host ends it. Scores carry over, and the next question begins.') +
+    '<h2 class="guide-h">Good to know</h2>' +
+    '<div class="guide-card"><div class="guide-step">•</div><div><h3>Answers are anonymous</h3>One answer per device per question. Your submission is never shown with your name.</div></div>' +
+    '<div class="guide-card"><div class="guide-step">•</div><div><h3>The judge decides</h3>A spoken answer can be accepted even if the wording differs — for example \u201cMan United\u201d for \u201cManchester United\u201d. The judge can also award bonus points for a clever answer that is not on the board.</div></div>' +
+    '<div class="guide-card"><div class="guide-step">•</div><div><h3>Players take turns</h3>Each team has five players and the answering player rotates automatically, so everyone gets a go.</div></div>' +
+    '<div class="guide-card"><div class="guide-step">•</div><div><h3>Winning</h3>Revealed answers add their points to the team\u2019s total. After the last question, the team with the highest total wins the final leaderboard.</div></div>' +
+    '<h2 class="guide-h">The screens</h2>' +
+    '<div class="guide-card"><div class="guide-step">▣</div><div><h3>Main screen</h3>Shown on the big display: the question, QR code, answer board, scores, and whose turn it is.</div></div>' +
+    '<div class="guide-card"><div class="guide-step">▣</div><div><h3>Survey page</h3>Opens on your phone from the QR code — this is where you submit your answer.</div></div>' +
+    '<div class="guide-card"><div class="guide-step">▣</div><div><h3>Buzzer pages</h3>One per team, each with a single large button in the team\u2019s colour. Be first.</div></div>' +
+    '</div>';
+}
+
+/* ---------- survey ---------- */
+function renderSurvey(){
+  const q = curQ();
+  const answered = localStorage.getItem(answeredKey()) === '1';
+  let card;
+  if (!S.questions.length || !q || (S.phase === 'idle' && !S.surveyOpen && !S.history.length && S.qIdx === 0 && !S.board.length))
+    card = surveyMsg('Survey not started', 'The host has not opened a question yet. Keep this page open.', true);
+  else if (S.surveyOpen && !answered)
+    card = '<div class="survey-card"><div class="stitle">QUESTION ' + (S.qIdx + 1) + ' — YOUR ANSWER IS ANONYMOUS</div>' +
+      '<div class="qbig">' + esc(q.text) + '</div>' +
+      (q.image ? '<img src="' + esc(q.image) + '" alt="" style="max-width:100%;border-radius:10px;margin-bottom:12px" onerror="this.style.display=\'none\'">' : '') +
+      '<input id="survey-answer" maxlength="60" placeholder="Type your answer…" data-enter="submitSurvey" autocomplete="off">' +
+      '<button class="btn btn-primary btn-big" style="width:100%;margin-top:12px" data-act="submitSurvey">Submit answer</button>' +
+      '<p style="font-size:12px;color:var(--ink-400);text-align:center;margin:10px 0 0">One answer per device · other answers stay hidden</p></div>' +
+      '<div class="survey-status"><span class="pill pill-green" style="background:rgba(74,157,92,.2);color:#A0D5AB;border:1px solid rgba(74,157,92,.5)">Survey open</span></div>';
+  else if (S.surveyOpen && answered)
+    card = surveyMsg('Answer submitted ✓', 'Thanks! Watch the big screen — the survey is still open for your colleagues.', false, true);
+  else if (S.phase === 'review')
+    card = surveyMsg('Survey closed', 'The host is reviewing the answers. The board is coming up on the big screen.', true);
+  else if (S.phase === 'board' || S.phase === 'roundEnd')
+    card = surveyMsg('Round in play', 'Watch the big screen and cheer for your team. Keep this page open for the next question.', true);
+  else
+    card = surveyMsg('Waiting for the next question', 'The host will open the next survey soon.', true);
+  return '<div class="survey"><a class="back-btn" href="' + baseURL() + '">← Back</a><img class="logo" src="css-feud-logo.png" alt="CSS Feud" onerror="this.outerHTML=\'<h1 style=&quot;font-family:Inter&quot;>CSS Feud</h1>\'">' + card + '</div>';
+}
+function surveyMsg(title, sub, dots, check){
+  return '<div class="survey-card" style="text-align:center">' + (check ? '<div class="big-check">✓</div>' : '') +
+    '<div class="qbig" style="margin-bottom:6px">' + esc(title) + (dots ? ' <span class="waiting-dot"></span><span class="waiting-dot"></span><span class="waiting-dot"></span>' : '') + '</div>' +
+    '<p style="color:var(--ink-500);font-size:14.5px;margin:0">' + esc(sub) + '</p></div>';
+}
+ACT.submitSurvey = function(){
+  const el = $('#survey-answer');
+  const v = (el ? el.value : '').replace(/\s+/g, ' ').trim();
+  if (!v){ toast('Please type an answer first'); return; }
+  if (!S.surveyOpen){ toast('The survey has just closed'); render(); return; }
+  Backend.submitResp(GID, S.qIdx, DEVICE + '_' + (S.surveySession || 0), v.slice(0, 60));
+  localStorage.setItem(answeredKey(), '1');
+  SND.correct();
+  render();
+};
+
+/* ---------- buzzer ---------- */
+function renderBuzzer(){
+  const team = Math.max(0, Math.min(1, (+param('team') || 1) - 1));
+  const t = S.teams[team];
+  const w = derivedWinner();
+  const open = S.buzz.open && !S.paused;
+  let cls = 'thebuzzer', label = 'BUZZ!', state = '';
+  if (!open){ cls += ' locked'; label = 'WAIT'; state = 'Buzzers are closed — wait for the host'; }
+  else if (w === null){ state = 'Buzzers are OPEN — be first!'; }
+  else if (w === team){ cls += ' won'; label = 'YOU\'RE FIRST!'; state = 'You buzzed first — answer now!'; }
+  else { cls += ' locked'; label = 'TOO LATE'; state = esc(tname(w)) + ' buzzed first'; }
+  return '<div class="buzzpage"><a class="back-btn" href="' + baseURL() + '">← Back</a><div class="head">' + LOGO +
+    '<div class="tname" style="color:' + esc(t.color) + '">' + esc(tname(team)) + '</div></div>' +
+    '<button class="' + cls + '" style="background:radial-gradient(circle at 50% 30%,' + esc(t.color) + ',rgba(0,0,0,.55) 160%)" data-act="buzzPress" data-t="' + team + '">' + label + '</button>' +
+    '<div class="buzz-state">' + state + '</div></div>';
+}
+
+/* ---------- import ---------- */
+function importJson(file){
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const st = JSON.parse(r.result);
+      if (!st.teams || !st.questions) throw new Error('bad');
+      st.id = st.id || ('g' + Date.now().toString(36));
+      GID = st.id; S = st; SUBQ = -1;
+      Backend.setActive(GID);
+      addLog('Game imported from JSON');
+      persist(); wireGame(); toast('Game imported');
+    } catch(e){ toast('That file is not a valid CSS Feud export'); }
+  };
+  r.readAsText(file);
+}
+
+/* ========================= wiring ========================= */
+function wireGame(){
+  Backend.onState(GID, handleRemote);
+  Backend.onBuzz(GID, list => { BUZZ = (list || []).sort((a, b) => a.t - b.t); handleBuzz(); });
+  SUBQ = -1; subResp();
+  refreshIndex();
+}
+async function refreshIndex(){ try { INDEX = await Backend.getIndex(); } catch(e){ INDEX = {}; } }
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const fn = ACT[el.dataset.act];
+  if (fn) fn(el.dataset, el);
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'import-file'){ if (e.target.files[0]) importJson(e.target.files[0]); return; }
+  const el = e.target.closest('[data-bind]');
+  if (el && (MODE !== 'admin' || ADMIN_OK)) bindChange(el);
+});
+document.addEventListener('keydown', e => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (e.key === 'Enter'){
+    const t = e.target.closest ? e.target.closest('[data-enter]') : null;
+    if (t){ e.preventDefault(); const fn = ACT[t.dataset.enter]; if (fn) fn({}); return; }
+  }
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+  if (MODE !== 'game' && MODE !== 'admin') return;
+  if (e.key === '1') tryBuzz(0);
+  else if (e.key === '2') tryBuzz(1);
+  else if (e.key === 'b' || e.key === 'B'){ if (S && S.buzz && (MODE === 'admin' ? ADMIN_OK : true)) ACT.resetBuzzers(); }
+});
+setInterval(() => {
+  if (!S) return;
+  if (S.surveyOpen && S.surveyEndsAt){
+    const left = Math.max(0, Math.ceil((S.surveyEndsAt - Backend.now()) / 1000));
+    document.querySelectorAll('[data-timer]').forEach(el => el.textContent = left);
+    if (left <= 0 && MODE === 'admin' && ADMIN_OK && AUTOCLOSED !== S.qIdx + 1){
+      AUTOCLOSED = S.qIdx + 1;
+      ACT.closeSurvey();
+      toast('Time is up — survey closed automatically');
+    }
+  }
+}, 500);
+addEventListener('resize', () => { const cv = $('#confetti'); if (cv){ cv.width = innerWidth; cv.height = innerHeight; } });
+
+/* ========================= boot ========================= */
+(async function main(){
+  if (MODE === 'home'){ render(); }
+  try { await Backend.init(); }
+  catch(e){ console.error('Backend init failed', e); toast('Could not reach Firebase — check your config'); }
+  GID = param('game') || (await Backend.getActive()) || 'demo';
+  S = await Backend.loadState(GID);
+  if (!S){
+    if (GID === 'demo'){
+      S = demoState();
+      DEMO_POOLS[0].forEach((t, i) => Backend.submitResp('demo', 0, 'demo' + i, t));
+      addLog('Demo game created');
+    } else S = defaultState(GID);
+    S.rev = 1; S.writer = DEVICE;
+    Backend.saveState(S);
+    Backend.setIndex(GID, {title: S.title, t: Date.now(), demo: !!S.demo});
+  }
+  lastFxN = S.fx ? S.fx.n : 0;
+  lastWinner = null;
+  wireGame();
+  render();
+})();
+
+</script>
+</body>
+</html>
