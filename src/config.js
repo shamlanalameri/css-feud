@@ -15,13 +15,13 @@ export const ADMIN_PASSWORD = '1234';
 //   4. Project settings -> General -> Your apps -> Web app -> copy the config
 //      object and paste its values below.
 export const FIREBASE_CONFIG = {
-  apiKey: '',
-  authDomain: '',
-  databaseURL: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: 'AIzaSyBmEiqSTsmURXwsl1mb8Y38XWRNb1k2enM',
+  authDomain: 'cssfeud.firebaseapp.com',
+  databaseURL: 'https://cssfeud-default-rtdb.firebaseio.com',
+  projectId: 'cssfeud',
+  storageBucket: 'cssfeud.firebasestorage.app',
+  messagingSenderId: '900645547445',
+  appId: '1:900645547445:web:2f06dcb5148b39c583fdfc',
 };
 
 // Firebase Realtime Database root node.
