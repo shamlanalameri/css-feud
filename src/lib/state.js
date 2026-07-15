@@ -32,6 +32,33 @@ export function defaultState(id, title) {
   };
 }
 
+// Upgrade a saved game to the current schema. Games saved by earlier versions
+// lack the `survey`/`stage` fields (they used surveyOpen/surveyEndsAt/…), which
+// would crash the new UI. Idempotent — safe to call on already-current state.
+export function normalizeState(s) {
+  if (!s || typeof s !== 'object') return s;
+  if (!s.survey) {
+    s.survey = { open: !!s.surveyOpen, endsAt: s.surveyEndsAt || 0, session: s.surveySession || 0 };
+  }
+  if (s.phase === 'survey') s.phase = 'idle'; // old per-question survey phase is gone
+  if (!s.stage) {
+    if (s.survey.open) s.stage = 'survey';
+    else if (['review', 'board', 'roundEnd', 'final'].includes(s.phase)) s.stage = 'play';
+    else s.stage = 'setup';
+  }
+  s.teams = s.teams || [];
+  s.questions = s.questions || [];
+  s.review = s.review || [];
+  s.board = s.board || [];
+  s.roundPoints = s.roundPoints || [0, 0];
+  s.buzz = s.buzz || { open: false, openedAt: 0 };
+  s.history = s.history || [];
+  s.log = s.log || [];
+  s.fx = s.fx || { n: 0, type: '' };
+  if (typeof s.qIdx !== 'number') s.qIdx = 0;
+  return s;
+}
+
 export function blankQ(text) {
   return { id: uid(), text: text || '', category: '', image: '', timeLimit: 0, maxAnswers: 6, preRaw: '', notes: '' };
 }

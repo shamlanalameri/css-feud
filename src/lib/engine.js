@@ -14,7 +14,7 @@ import { Backend } from './backend.js';
 import { uid, param, clone, setPath, fmtT, toast, download, normTxt } from './utils.js';
 import { SND, isMuted, toggleMuted } from './sound.js';
 import { confetti } from './confetti.js';
-import { defaultState, blankQ, demoState, starterQuestions, DEMO_POOLS, parsePre, buildGroups } from './state.js';
+import { defaultState, blankQ, demoState, starterQuestions, normalizeState, DEMO_POOLS, parsePre, buildGroups } from './state.js';
 
 /* ========================= app globals ========================= */
 export const MODE = param('mode') || 'home';
@@ -161,7 +161,7 @@ function runFx(fx) {
 function handleRemote(st) {
   if (!st) return;
   if (st.writer === DEVICE && st.rev <= (S ? S.rev : 0)) return;
-  S = st;
+  S = normalizeState(st);
   if (S.fx && S.fx.n !== lastFxN) {
     lastFxN = S.fx.n;
     runFx(S.fx);
@@ -286,7 +286,7 @@ export const ACT = {
   },
   async loadGame(g) {
     GID = g;
-    S = await Backend.loadState(GID);
+    S = normalizeState(await Backend.loadState(GID));
     if (!S) {
       toast('Could not load that game');
       return;
@@ -842,7 +842,7 @@ export function importJson(file) {
       if (!st.teams || !st.questions) throw new Error('bad');
       st.id = st.id || 'g' + Date.now().toString(36);
       GID = st.id;
-      S = st;
+      S = normalizeState(st);
       respSubCount = -1;
       Backend.setActive(GID);
       addLog('Game imported from JSON');
@@ -916,8 +916,14 @@ export async function boot() {
     console.error('Backend init failed', e);
     toast('Could not reach Firebase — check your config');
   }
-  GID = param('game') || (await Backend.getActive()) || 'demo';
-  S = await Backend.loadState(GID);
+  try {
+    GID = param('game') || (await Backend.getActive()) || 'demo';
+    S = normalizeState(await Backend.loadState(GID));
+  } catch (e) {
+    console.error('Loading game failed', e);
+    GID = GID || 'demo';
+    S = null;
+  }
   if (!S) {
     if (GID === 'demo') {
       // Default landing game: demo teams + questions, but NO pre-filled answers,
